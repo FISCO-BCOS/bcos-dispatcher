@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <tbb/mutex.h>
 #include "bcos-framework/interfaces/dispatcher/DispatcherInterface.h"
-#include "bcos-framework/interfaces/executor/ExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 
 namespace bcos {
@@ -28,8 +27,6 @@ private:
     bool verify;
     std::function<void(const Error::Ptr &, const protocol::BlockHeader::Ptr &)> callback;
   };
-
-  std::shared_ptr<bcos::executor::ExecutorInterface> m_executor;
 
   tbb::concurrent_queue<BlockWithCallback> m_blockQueue;
   tbb::concurrent_queue<std::function<void(const Error::Ptr &, const protocol::Block::Ptr &)>> m_waitingQueue;
