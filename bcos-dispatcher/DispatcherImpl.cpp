@@ -24,7 +24,9 @@ void DispatcherImpl::asyncExecuteBlock(const protocol::Block::Ptr& _block, bool 
                                               bcos::protocol::TransactionsPtr _txs) {
         if (_error)
         {
-            DISPATCHER_LOG(ERROR) << LOG_DESC("asyncExecuteBlock failed for fill the block filled")
+            DISPATCHER_LOG(ERROR) << LOG_DESC("asyncExecuteBlock: asyncFillBlock failed")
+                                  << LOG_KV("consNum", _block->blockHeader()->number())
+                                  << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                                   << LOG_KV("code", _error->errorCode())
                                   << LOG_KV("msg", _error->errorMessage());
             _callback(_error, nullptr);
@@ -50,8 +52,8 @@ void DispatcherImpl::asyncExecuteBlock(const protocol::Block::Ptr& _block, bool 
         }
         catch (std::exception const& e)
         {
-            LOG(ERROR) << LOG_DESC("asyncExecuteBlock exception")
-                       << LOG_KV("error", boost::diagnostic_information(e));
+            DISPATCHER_LOG(ERROR) << LOG_DESC("asyncExecuteBlock exception")
+                                  << LOG_KV("error", boost::diagnostic_information(e));
         }
     });
 }
@@ -60,7 +62,7 @@ void DispatcherImpl::asyncExecuteCompletedBlock(const protocol::Block::Ptr& _blo
     std::function<void(const Error::Ptr&, const protocol::BlockHeader::Ptr&)> _callback)
 {
     DISPATCHER_LOG(INFO) << LOG_DESC("asyncExecuteCompletedBlock")
-                         << LOG_KV("number", _block->blockHeader()->number())
+                         << LOG_KV("consNum", _block->blockHeader()->number())
                          << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                          << LOG_KV("verify", _verify);
     std::list<std::function<void()>> callbacks;
@@ -95,7 +97,7 @@ void DispatcherImpl::asyncGetLatestBlock(
         auto item = m_blockQueue.front();
         // m_blockQueue.pop();
         DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock")
-                             << LOG_KV("number", item.block->blockHeader()->number())
+                             << LOG_KV("consNum", item.block->blockHeader()->number())
                              << LOG_KV("hash", item.block->blockHeader()->hash().abridged());
         scoped.release();
         _callback(nullptr, item.block);
@@ -136,7 +138,7 @@ void DispatcherImpl::asyncNotifyExecutionResult(const Error::Ptr& _error,
 
             scoped.release();
             DISPATCHER_LOG(INFO) << LOG_DESC("asyncNotifyExecutionResult")
-                                 << LOG_KV("number", _header->number())
+                                 << LOG_KV("consNum", _header->number())
                                  << LOG_KV("hashAfterExec", _header->hash().abridged());
             item.callback(_error, _header);
         }
