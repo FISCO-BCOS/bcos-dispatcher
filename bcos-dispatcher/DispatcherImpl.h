@@ -16,45 +16,43 @@ class DispatcherImpl : public DispatcherInterface
 {
 public:
     using Ptr = std::shared_ptr<DispatcherImpl>;
+    using ExecutionResultCallback =
+        std::function<void(const Error::Ptr&, const protocol::BlockHeader::Ptr&)>;
     DispatcherImpl() = default;
     ~DispatcherImpl() override {}
     void asyncExecuteBlock(const protocol::Block::Ptr& _block, bool _verify,
-        std::function<void(const Error::Ptr&, const protocol::BlockHeader::Ptr&)> _callback)
-        override;
+        ExecutionResultCallback _callback) override;
     void asyncGetLatestBlock(
         std::function<void(const Error::Ptr&, const protocol::Block::Ptr&)> _callback) override;
 
     void asyncNotifyExecutionResult(const Error::Ptr& _error,
-        const protocol::BlockHeader::Ptr& _header,
+        bcos::crypto::HashType const& _orgHash, const protocol::BlockHeader::Ptr& _header,
         std::function<void(const Error::Ptr&)> _callback) override;
 
     void init(bcos::txpool::TxPoolInterface::Ptr _txpool) { m_txpool = _txpool; }
     void start() override;
     void stop() override;
 
-    virtual void asyncExecuteCompletedBlock(const protocol::Block::Ptr& _block, bool _verify,
-        std::function<void(const Error::Ptr&, const protocol::BlockHeader::Ptr&)> _callback);
+    virtual void asyncExecuteCompletedBlock(
+        const protocol::Block::Ptr& _block, bool _verify, ExecutionResultCallback _callback);
 
 private:
-    struct BlockWithCallback
-    {
-        protocol::Block::Ptr block;
-        bool verify;
-        std::function<void(const Error::Ptr&, const protocol::BlockHeader::Ptr&)> callback;
-    };
-
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
 
     // increase order
     struct BlockCmp
     {
-        bool operator()(BlockWithCallback const& _first, BlockWithCallback const& _second) const
+        bool operator()(
+            protocol::Block::Ptr const& _first, protocol::Block::Ptr const& _second) const
         {
             // increase order
-            return _first.block->blockHeader()->number() > _second.block->blockHeader()->number();
+            return _first->blockHeader()->number() > _second->blockHeader()->number();
         }
     };
-    std::priority_queue<BlockWithCallback, std::vector<BlockWithCallback>, BlockCmp> m_blockQueue;
+    std::priority_queue<protocol::Block::Ptr, std::vector<protocol::Block::Ptr>, BlockCmp>
+        m_blockQueue;
+    std::map<bcos::crypto::HashType, std::vector<ExecutionResultCallback>> m_callbackMap;
+
     std::queue<std::function<void(const Error::Ptr&, const protocol::Block::Ptr&)>> m_waitingQueue;
     mutable SharedMutex x_blockQueue;
 };
