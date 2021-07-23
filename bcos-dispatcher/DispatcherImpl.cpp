@@ -65,21 +65,32 @@ void DispatcherImpl::asyncExecuteBlock(
 void DispatcherImpl::asyncExecuteCompletedBlock(
     const Block::Ptr& _block, bool _verify, ExecutionResultCallback _callback)
 {
+    auto cacheHeader = getExecResultCache(_block->blockHeader()->hash());
+    if (cacheHeader)
+    {
+        _callback(nullptr, cacheHeader);
+        DISPATCHER_LOG(INFO) << LOG_DESC("asyncExecuteCompletedBlock: hit the cache")
+                             << LOG_KV("consNum", _block->blockHeader()->number())
+                             << LOG_KV("hash", _block->blockHeader()->hash().abridged())
+                             << LOG_KV("hashAfterExec", cacheHeader->hash().abridged())
+                             << LOG_KV("verify", _verify);
+        return;
+    }
     // Note: the waiting queue must be exist to accelerate the blocks-fetching speed
     std::list<std::function<void()>> callbacks;
     {
         WriteGuard l(x_blockQueue);
-        m_blockQueue.push(_block);
         auto hash = _block->blockHeader()->hash();
+        m_blockQueue.push(_block);
         if (m_callbackMap.count(hash))
         {
-            m_callbackMap[hash].push_back(_callback);
+            m_callbackMap[hash].push(_callback);
         }
         else
         {
-            std::vector<ExecutionResultCallback> callbackList;
+            std::queue<ExecutionResultCallback> callbackList;
             m_callbackMap[hash] = callbackList;
-            m_callbackMap[hash].push_back(_callback);
+            m_callbackMap[hash].push(_callback);
         }
         DISPATCHER_LOG(INFO) << LOG_DESC("asyncExecuteCompletedBlock")
                              << LOG_KV("consNum", _block->blockHeader()->number())
@@ -90,9 +101,11 @@ void DispatcherImpl::asyncExecuteCompletedBlock(
         {
             auto callback = m_waitingQueue.front();
             m_waitingQueue.pop();
+            // Note: since the callback maybe uncalled for executor timeout, here can't pop the
+            // block
             auto block = m_blockQueue.top();
-            m_blockQueue.pop();
-            DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: dispatch block")
+            DISPATCHER_LOG(INFO) << LOG_DESC(
+                                        "asyncGetLatestBlock: dispatch block to the waiting queue")
                                  << LOG_KV("consNum", block->blockHeader()->number())
                                  << LOG_KV("hash", block->blockHeader()->hash().abridged());
             callbacks.push_back([callback, block]() { callback(nullptr, block); });
@@ -108,34 +121,79 @@ void DispatcherImpl::asyncGetLatestBlock(
     std::function<void(const Error::Ptr&, const Block::Ptr&)> _callback)
 {
     Block::Ptr _obtainedBlock = nullptr;
+    bool existUnExecutedBlock = false;
     {
         WriteGuard l(x_blockQueue);
         // get pending block to execute
-        if (!m_blockQueue.empty())
+        while (!m_blockQueue.empty())
         {
             _obtainedBlock = m_blockQueue.top();
+            auto blockHash = _obtainedBlock->blockHeader()->hash();
             m_blockQueue.pop();
-            DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: dispatch block")
+            if (m_callbackMap.count(blockHash))
+            {
+                existUnExecutedBlock = true;
+                break;
+            }
+            // the block has already been executed
+            DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: block has already been executed")
                                  << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
-                                 << LOG_KV(
-                                        "hash", _obtainedBlock->blockHeader()->hash().abridged());
+                                 << LOG_KV("hash", blockHash.abridged());
         }
-        else
+        // push back the callback to the waiting queue for the new block
+        if (!existUnExecutedBlock)
         {
             m_waitingQueue.emplace(_callback);
+            return;
         }
     }
-    if (_obtainedBlock)
+    if (existUnExecutedBlock)
     {
         _callback(nullptr, _obtainedBlock);
+        DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: dispatch block")
+                             << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
+                             << LOG_KV("hash", _obtainedBlock->blockHeader()->hash().abridged());
     }
+}
+
+void DispatcherImpl::updateExecResultCache(const Error::Ptr& _error,
+    bcos::crypto::HashType const& _orgHash, const BlockHeader::Ptr& _header)
+{
+    if (_error)
+    {
+        return;
+    }
+    UpgradableGuard l(x_execResultCache);
+    if (m_execResultCache.count(_orgHash))
+    {
+        return;
+    }
+    UpgradeGuard ul(l);
+    if (m_execResultCache.size() >= m_execResultCacheSize)
+    {
+        m_execResultCache.clear();
+    }
+    // TODO: save a populated blockHeader in case of the header will be change by the caller
+    m_execResultCache[_orgHash] = _header;
+    m_execResultCache[_header->hash()] = _header;
+}
+
+BlockHeader::Ptr DispatcherImpl::getExecResultCache(bcos::crypto::HashType const& _hash)
+{
+    ReadGuard l(x_execResultCache);
+    if (!m_execResultCache.count(_hash))
+    {
+        return nullptr;
+    }
+    // TODO: save a populated blockHeader in case of the header will be change by the caller
+    return m_execResultCache[_hash];
 }
 
 void DispatcherImpl::asyncNotifyExecutionResult(const Error::Ptr& _error,
     bcos::crypto::HashType const& _orgHash, const BlockHeader::Ptr& _header,
     std::function<void(const Error::Ptr&)> _callback)
 {
-    std::vector<ExecutionResultCallback> callbackList;
+    ExecutionResultCallback callback = nullptr;
     {
         WriteGuard l(x_blockQueue);
         if (!m_callbackMap.count(_orgHash))
@@ -145,15 +203,26 @@ void DispatcherImpl::asyncNotifyExecutionResult(const Error::Ptr& _error,
             _callback(error);
             return;
         }
-        callbackList = m_callbackMap[_orgHash];
-        m_callbackMap.erase(_orgHash);
+        callback = m_callbackMap[_orgHash].front();
+        m_callbackMap[_orgHash].pop();
+        if ((m_callbackMap[_orgHash]).empty())
+        {
+            m_callbackMap.erase(_orgHash);
+        }
+        // clear the blockQueue
+        if (m_callbackMap.size() == 0)
+        {
+            std::priority_queue<protocol::Block::Ptr, std::vector<protocol::Block::Ptr>, BlockCmp>
+                emptyQueue;
+            m_blockQueue = emptyQueue;
+        }
     }
+    updateExecResultCache(_error, _orgHash, _header);
+
     // Note: must call the callback after the lock, in case of the callback retry to call
     // asyncExecuteBlock
-    for (auto callback : callbackList)
-    {
-        callback(_error, _header);
-    }
+    callback(_error, _header);
+
     DISPATCHER_LOG(INFO) << LOG_DESC("asyncNotifyExecutionResult")
                          << LOG_KV("consNum", _header->number())
                          << LOG_KV("orgHash", _orgHash.abridged())
