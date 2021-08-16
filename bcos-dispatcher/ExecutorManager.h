@@ -10,9 +10,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace dispatcher
+namespace bcos::dispatcher
 {
 class ExecutorManager
 {
@@ -29,36 +27,33 @@ public:
         std::unique_lock lock(m_mutex);
 
         typename Iterator::difference_type size = end - begin;
-        std::vector<bcos::executor::ParallelExecutorInterface::Ptr> result(size);
+        std::vector<bcos::executor::ParallelExecutorInterface::Ptr> result;
+        result.reserve(size);
 
-        tbb::parallel_for(tbb::blocked_range<typename Iterator::difference_type>(0, size),
-            [this, &result, &begin](
-                const tbb::blocked_range<typename Iterator::difference_type>& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
-                {
-                    auto& contract = *(begin + it);
-                    auto executorIt = m_contract2ExecutorInfo.find(contract);
-                    if (executorIt != m_contract2ExecutorInfo.end())
-                    {
-                        result[it] = executorIt->second->executor;
-                    }
-                    else
-                    {
-                        std::unique_lock heapLock(m_heapMutex);
+        for (auto it = begin; it != end; ++it)
+        {
+            auto& contract = *it;
+            auto executorIt = m_contract2ExecutorInfo.find(contract);
 
-                        std::pop_heap(
-                            m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
-                        auto executorInfo = m_executorsHeap.back();
-                        executorInfo->contracts.insert(*(begin + it));
-                        std::push_heap(
-                            m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
+            executor::ParallelExecutorInterface::Ptr executor;
+            if (executorIt != m_contract2ExecutorInfo.end())
+            {
+                executor = executorIt->second->executor;
+            }
+            else
+            {
+                std::pop_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
+                auto executorInfo = m_executorsHeap.back();
+                executorInfo->contracts.insert(contract);
+                std::push_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
 
-                        m_contract2ExecutorInfo.emplace(contract, executorInfo);
+                (void)m_contract2ExecutorInfo.insert({contract, executorInfo});
 
-                        result[it] = executorInfo->executor;
-                    }
-                }
-            });
+                executor = executorInfo->executor;
+            }
+
+            result.push_back(executor);
+        }
 
         return result;
     }
@@ -70,6 +65,7 @@ private:
     {
         using Ptr = std::shared_ptr<ExecutorInfo>;
 
+        std::string name;
         bcos::executor::ParallelExecutorInterface::Ptr executor;
         std::set<std::string> contracts;
     };
@@ -89,5 +85,4 @@ private:
     std::vector<ExecutorInfo::Ptr> m_executorsHeap;
     std::shared_mutex m_heapMutex;
 };
-}  // namespace dispatcher
-}  // namespace bcos
+}  // namespace bcos::dispatcher
