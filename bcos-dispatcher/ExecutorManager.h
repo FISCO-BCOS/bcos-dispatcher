@@ -14,12 +14,13 @@ namespace bcos
 {
 namespace dispatcher
 {
-
 class ExecutorManager
 {
 public:
-    void addExecutor(const std::string& name,
-        const bcos::executor::ParallelExecutorInterface::Ptr& executor);
+    using Ptr = std::shared_ptr<ExecutorManager>;
+
+    void addExecutor(
+        const std::string& name, const bcos::executor::ParallelExecutorInterface::Ptr& executor);
 
     template <class Iterator>
     std::vector<bcos::executor::ParallelExecutorInterface::Ptr> dispatchExecutor(
@@ -30,15 +31,16 @@ public:
         typename Iterator::difference_type size = end - begin;
         std::vector<bcos::executor::ParallelExecutorInterface::Ptr> result(size);
 
-        tbb::parallel_for(tbb::blocked_range(0, size),
+        tbb::parallel_for(tbb::blocked_range<typename Iterator::difference_type>(0, size),
             [this, &result, &begin](
                 const tbb::blocked_range<typename Iterator::difference_type>& range) {
                 for (auto it = range.begin(); it != range.end(); ++it)
                 {
-                    auto executorIt = m_contract2ExecutorInfo.find(begin + it);
+                    auto& contract = *(begin + it);
+                    auto executorIt = m_contract2ExecutorInfo.find(contract);
                     if (executorIt != m_contract2ExecutorInfo.end())
                     {
-                        result[it] = executorIt->executor;
+                        result[it] = executorIt->second->executor;
                     }
                     else
                     {
@@ -46,12 +48,14 @@ public:
 
                         std::pop_heap(
                             m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
-                        ExecutorInfo::Ptr executorInfo = m_executorsHeap.back();
-                        executorInfo->contracts.insert(*it);
+                        auto executorInfo = m_executorsHeap.back();
+                        executorInfo->contracts.insert(*(begin + it));
                         std::push_heap(
                             m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
 
-                        result[it] = std::move(executorInfo);
+                        m_contract2ExecutorInfo.emplace(contract, executorInfo);
+
+                        result[it] = executorInfo->executor;
                     }
                 }
             });
@@ -72,9 +76,9 @@ private:
 
     struct ExecutorInfoComp
     {
-        constexpr bool operator()(const ExecutorInfo::Ptr& lhs, const ExecutorInfo::Ptr& rhs) const
+        bool operator()(const ExecutorInfo::Ptr& lhs, const ExecutorInfo::Ptr& rhs) const
         {
-            return lhs->contracts.size() < rhs->contracts.size();
+            return lhs->contracts.size() > rhs->contracts.size();
         }
     } m_executorComp;
 

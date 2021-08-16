@@ -9,7 +9,6 @@
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos

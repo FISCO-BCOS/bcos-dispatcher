@@ -12,12 +12,12 @@ void ExecutorManager::addExecutor(
 {
     std::unique_lock lock(m_mutex);
 
-    auto executorInfo = std::make_shared<ExecutorInfo>();
+    auto executorInfo = std::make_shared<ExecutorInfo>();   
     executorInfo->executor = executor;
 
-    auto [it, exists] = m_name2Executors.emplace(name, std::move(executorInfo));
+    auto [it, exists] = m_name2Executors.emplace(name, executorInfo);
 
-    if (exists)
+    if (!exists)
     {
         throw bcos::Exception("Executor already exists");
     }
