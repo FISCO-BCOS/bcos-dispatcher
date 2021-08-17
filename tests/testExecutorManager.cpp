@@ -176,5 +176,22 @@ BOOST_AUTO_TEST_CASE(dispatch)
     BOOST_CHECK_EQUAL(oldContract, 150 - 35 - 10);  // exclude new contract and executor3's contract
 }
 
+BOOST_AUTO_TEST_CASE(remove)
+{
+    BOOST_CHECK_NO_THROW(
+        executorManager->addExecutor("1", std::make_shared<FakeParallelExecutor>("1")));
+    BOOST_CHECK_NO_THROW(
+        executorManager->addExecutor("2", std::make_shared<FakeParallelExecutor>("2")));
+    BOOST_CHECK_NO_THROW(
+        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")));
+    BOOST_CHECK_THROW(
+        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")),
+        bcos::Exception);
+
+    BOOST_CHECK_NO_THROW(executorManager->removeExecutor("2"));
+    BOOST_CHECK_THROW(executorManager->removeExecutor("10"), bcos::Exception);
+    BOOST_CHECK_THROW(executorManager->removeExecutor("2"), bcos::Exception);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

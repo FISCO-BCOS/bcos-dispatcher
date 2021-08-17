@@ -49,6 +49,9 @@ void ExecutorManager::removeExecutor(const std::string& name)
 
         m_name2Executors.unsafe_erase(it);
     }
+    else {
+        BOOST_THROW_EXCEPTION(bcos::Exception("Not found executor: " + name));
+    }
 
     bool deleted = false;
     for (auto heapIt = m_executorsHeap.begin(); heapIt != m_executorsHeap.end(); ++heapIt)
