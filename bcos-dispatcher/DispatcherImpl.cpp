@@ -110,7 +110,8 @@ void DispatcherImpl::asyncExecuteCompletedBlock(
             DISPATCHER_LOG(INFO) << LOG_DESC(
                                         "asyncGetLatestBlock: dispatch block to the waiting queue")
                                  << LOG_KV("consNum", block->blockHeader()->number())
-                                 << LOG_KV("hash", block->blockHeader()->hash().abridged());
+                                 << LOG_KV("hash", block->blockHeader()->hash().abridged())
+                                 << LOG_KV("queueSize", m_waitingQueue.size());
             callbacks.push_back([callback, block]() { callback(nullptr, block); });
         }
         // repush the block into the blockQueue
@@ -128,44 +129,64 @@ void DispatcherImpl::asyncExecuteCompletedBlock(
 void DispatcherImpl::asyncGetLatestBlock(
     std::function<void(const Error::Ptr&, const Block::Ptr&)> _callback)
 {
-    Block::Ptr _obtainedBlock = nullptr;
-    bool existUnExecutedBlock = false;
+    try
     {
-        WriteGuard l(x_blockQueue);
-        // clear the expired waiting queue
-        if (!m_waitingQueue.empty())
+        Block::Ptr _obtainedBlock = nullptr;
+        std::vector<std::function<void(const Error::Ptr&, const Block::Ptr&)>> expiredCallbacks;
+        bool existUnExecutedBlock = false;
         {
-            m_waitingQueue.pop();
-        }
-        // get pending block to execute
-        while (!m_blockQueue.empty())
-        {
-            _obtainedBlock = m_blockQueue.top();
-            auto blockHash = _obtainedBlock->blockHeader()->hash();
-            m_blockQueue.pop();
-            if (m_callbackMap.count(blockHash))
+            WriteGuard l(x_blockQueue);
+            // clear the expired waiting queue
+            while (!m_waitingQueue.empty())
             {
-                existUnExecutedBlock = true;
-                break;
+                expiredCallbacks.push_back(m_waitingQueue.front());
+                m_waitingQueue.pop();
             }
-            // the block has already been executed
-            DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: block has already been executed")
-                                 << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
-                                 << LOG_KV("hash", blockHash.abridged());
+            // get pending block to execute
+            while (!m_blockQueue.empty())
+            {
+                _obtainedBlock = m_blockQueue.top();
+                auto blockHash = _obtainedBlock->blockHeader()->hash();
+                m_blockQueue.pop();
+                if (m_callbackMap.count(blockHash))
+                {
+                    existUnExecutedBlock = true;
+                    break;
+                }
+                // the block has already been executed
+                DISPATCHER_LOG(INFO)
+                    << LOG_DESC("asyncGetLatestBlock: block has already been executed")
+                    << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
+                    << LOG_KV("hash", blockHash.abridged());
+            }
+            // push back the callback to the waiting queue for the new block
+            if (!existUnExecutedBlock)
+            {
+                m_waitingQueue.emplace(_callback);
+                return;
+            }
         }
-        // push back the callback to the waiting queue for the new block
-        if (!existUnExecutedBlock)
+        if (existUnExecutedBlock)
         {
-            m_waitingQueue.emplace(_callback);
-            return;
+            _callback(nullptr, _obtainedBlock);
+            DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: dispatch block")
+                                 << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
+                                 << LOG_KV(
+                                        "hash", _obtainedBlock->blockHeader()->hash().abridged());
+        }
+        for (auto callback : expiredCallbacks)
+        {
+            if (callback)
+            {
+                callback(std::make_shared<Error>(-1, "there are no blocks in the current system."),
+                    nullptr);
+            }
         }
     }
-    if (existUnExecutedBlock)
+    catch (std::exception const& e)
     {
-        _callback(nullptr, _obtainedBlock);
-        DISPATCHER_LOG(INFO) << LOG_DESC("asyncGetLatestBlock: dispatch block")
-                             << LOG_KV("consNum", _obtainedBlock->blockHeader()->number())
-                             << LOG_KV("hash", _obtainedBlock->blockHeader()->hash().abridged());
+        DISPATCHER_LOG(WARNING) << LOG_DESC("asyncGetLatestBlock exception")
+                                << LOG_KV("error", boost::diagnostic_information(e));
     }
 }
 
