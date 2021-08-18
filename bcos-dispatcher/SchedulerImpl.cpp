@@ -26,7 +26,9 @@ void SchedulerImpl::callTransaction(const protocol::Transaction::ConstPtr& tx,
 
 void SchedulerImpl::registerExecutor(
     std::function<void(const Error::ConstPtr&)> callback, std::string&& executorID) noexcept
-{}
+{
+    m_executorManager->addExecutor(executorID, const bcos::executor::ParallelExecutorInterface::Ptr &executor);
+}
 
 void SchedulerImpl::notifyCommitResult(const std::string_view& executorID,
     bcos::protocol::BlockNumber blockNumber,

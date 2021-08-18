@@ -16,30 +16,30 @@ public:
     const std::string& name() const { return m_name; }
 
     // Prepare block header
-    virtual void start(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void start(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(const bcos::Error::ConstPtr&)> callback) noexcept override
     {}
 
-    virtual void executeTransaction(const std::string_view& to,
+    void executeTransaction(const std::string_view& to,
         const bcos::protocol::ExecutionParams::ConstPtr& input,
         std::function<void(const bcos::Error::ConstPtr&, bcos::protocol::ExecutionResult::Ptr&&)>
             callback) noexcept override
     {}
 
     // Write data to storage, return all contract's change hash
-    virtual void commit(bcos::protocol::BlockNumber blockNumber,
+    void commit(bcos::protocol::BlockNumber blockNumber,
         std::function<void(
             const bcos::Error::ConstPtr&, std::vector<bcos::executor::ContractStatus::Ptr>&&)>
             callback) noexcept override
     {}
 
     // drop current changes
-    virtual void rollback(bcos::protocol::BlockNumber blockNumber,
+    void rollback(bcos::protocol::BlockNumber blockNumber,
         std::function<void(const bcos::Error::ConstPtr&)> callback) noexcept override
     {}
 
     // drop all status
-    virtual void reset(std::function<void(const bcos::Error::ConstPtr&)>) noexcept override {}
+    void reset(std::function<void(const bcos::Error::ConstPtr&)>) noexcept override {}
 
     std::string m_name;
 };
