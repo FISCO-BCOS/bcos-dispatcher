@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BlockTask.h"
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/executor/ParallelExecutorInterface.h"
@@ -11,7 +10,7 @@ namespace bcos
 {
 namespace dispatcher
 {
-class SchedulerImpl : SchedulerInterface
+class SchedulerImpl : public SchedulerInterface
 {
 public:
     // by pbft & sync
