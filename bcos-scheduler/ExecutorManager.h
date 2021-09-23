@@ -5,6 +5,8 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
 #include <tbb/parallel_for.h>
+#include <boost/iterator/iterator_categories.hpp>
+#include <boost/range/any_range.hpp>
 #include <iterator>
 #include <shared_mutex>
 #include <string>
@@ -17,48 +19,13 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
-    void addExecutor(const std::string& name,
+    void addExecutor(std::string name,
         const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor);
 
-    template <class Iterator>
     std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> dispatchExecutor(
-        Iterator begin, Iterator end)
-    {
-        std::unique_lock lock(m_mutex);
+        boost::any_range<std::string_view, boost::random_access_traversal_tag> contracts);
 
-        typename Iterator::difference_type size = end - begin;
-        std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> result;
-        result.reserve(size);
-
-        for (auto it = begin; it != end; ++it)
-        {
-            auto& contract = *it;
-            auto executorIt = m_contract2ExecutorInfo.find(contract);
-
-            executor::ParallelTransactionExecutorInterface::Ptr executor;
-            if (executorIt != m_contract2ExecutorInfo.end())
-            {
-                executor = executorIt->second->executor;
-            }
-            else
-            {
-                std::pop_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
-                auto executorInfo = m_executorsHeap.back();
-                executorInfo->contracts.insert(contract);
-                std::push_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
-
-                (void)m_contract2ExecutorInfo.insert({contract, executorInfo});
-
-                executor = executorInfo->executor;
-            }
-
-            result.push_back(executor);
-        }
-
-        return result;
-    }
-
-    void removeExecutor(const std::string& name);
+    void removeExecutor(const std::string_view& name);
 
 private:
     struct ExecutorInfo
@@ -78,8 +45,10 @@ private:
         }
     } m_executorComp;
 
-    tbb::concurrent_unordered_map<std::string, ExecutorInfo::Ptr> m_contract2ExecutorInfo;
-    tbb::concurrent_unordered_map<std::string, ExecutorInfo::Ptr> m_name2Executors;
+    tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
+        m_contract2ExecutorInfo;
+    tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
+        m_name2Executors;
     std::shared_mutex m_mutex;
 
     std::vector<ExecutorInfo::Ptr> m_executorsHeap;

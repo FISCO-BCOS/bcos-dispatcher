@@ -1,4 +1,4 @@
-#include "../bcos-dispatcher/ExecutorManager.h"
+#include "../bcos-scheduler/ExecutorManager.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "libutilities/Common.h"
 #include <boost/test/unit_test.hpp>
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
         contracts.push_back(boost::lexical_cast<std::string>(i));
     }
 
-    auto executors = executorManager->dispatchExecutor(contracts.begin(), contracts.end());
+    auto executors = executorManager->dispatchExecutor(contracts);
     BOOST_CHECK_EQUAL(executors.size(), 100);
 
     std::map<std::string, int> executor2count{
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
     BOOST_CHECK_EQUAL(executor2count["3"], 25);
     BOOST_CHECK_EQUAL(executor2count["4"], 25);
 
-    auto executors2 = executorManager->dispatchExecutor(contracts.begin(), contracts.end());
+    auto executors2 = executorManager->dispatchExecutor(contracts);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         executors.begin(), executors.end(), executors2.begin(), executors2.end());
 
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
 
     contracts2.insert(contracts2.end(), contracts.begin(), contracts.end());
 
-    auto executors3 = executorManager->dispatchExecutor(contracts2.begin(), contracts2.end());
+    auto executors3 = executorManager->dispatchExecutor(contracts2);
     std::map<std::string, int> executor2count2{
         std::pair("1", 0), std::pair("2", 0), std::pair("3", 0), std::pair("4", 0)};
     for (auto it = executors3.begin(); it != executors3.end(); ++it)
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
     BOOST_CHECK_EQUAL(executor2count2["3"], 35);
     BOOST_CHECK_EQUAL(executor2count2["4"], 35);
 
-    auto executors4 = executorManager->dispatchExecutor(contracts2.begin(), contracts2.end());
+    auto executors4 = executorManager->dispatchExecutor(contracts2);
 
     std::map<std::string, executor::ParallelTransactionExecutorInterface::Ptr> contract2executor;
     for (size_t i = 0; i < contracts2.size(); ++i)
@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
     }
 
     contracts2.insert(contracts2.end(), contracts3.begin(), contracts3.end());
-    auto executors5 = executorManager->dispatchExecutor(contracts2.begin(), contracts2.end());
+    auto executors5 = executorManager->dispatchExecutor(contracts2);
     BOOST_CHECK_EQUAL(executors5.size(), 150);
 
     size_t oldContract = 0;

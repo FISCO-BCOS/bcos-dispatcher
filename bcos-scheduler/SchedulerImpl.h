@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BlockContext.h"
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
@@ -42,6 +43,8 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
+    std::list<BlockContext::Ptr> m_blockContexts;
+
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;

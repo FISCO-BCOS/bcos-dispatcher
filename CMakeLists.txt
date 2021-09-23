@@ -25,6 +25,7 @@ include(InstallBcosFrameworkDependencies)
 
 set(BCOS_DISPATCHER_TARGET "dispatcher")
 add_subdirectory(bcos-dispatcher)
+add_subdirectory(bcos-scheduler)
 
 # install bcos-dispatcher target
 include(InstallConfig)
