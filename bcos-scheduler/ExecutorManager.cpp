@@ -8,8 +8,8 @@
 
 using namespace bcos::dispatcher;
 
-void ExecutorManager::addExecutor(
-    const std::string& name, const bcos::executor::ParallelExecutorInterface::Ptr& executor)
+void ExecutorManager::addExecutor(const std::string& name,
+    const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor)
 {
     std::unique_lock lock(m_mutex);
 
@@ -49,7 +49,8 @@ void ExecutorManager::removeExecutor(const std::string& name)
 
         m_name2Executors.unsafe_erase(it);
     }
-    else {
+    else
+    {
         BOOST_THROW_EXCEPTION(bcos::Exception("Not found executor: " + name));
     }
 

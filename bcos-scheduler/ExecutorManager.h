@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bcos-framework/interfaces/executor/ParallelExecutorInterface.h"
+#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
@@ -17,17 +17,17 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
-    void addExecutor(
-        const std::string& name, const bcos::executor::ParallelExecutorInterface::Ptr& executor);
+    void addExecutor(const std::string& name,
+        const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor);
 
     template <class Iterator>
-    std::vector<bcos::executor::ParallelExecutorInterface::Ptr> dispatchExecutor(
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> dispatchExecutor(
         Iterator begin, Iterator end)
     {
         std::unique_lock lock(m_mutex);
 
         typename Iterator::difference_type size = end - begin;
-        std::vector<bcos::executor::ParallelExecutorInterface::Ptr> result;
+        std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> result;
         result.reserve(size);
 
         for (auto it = begin; it != end; ++it)
@@ -35,7 +35,7 @@ public:
             auto& contract = *it;
             auto executorIt = m_contract2ExecutorInfo.find(contract);
 
-            executor::ParallelExecutorInterface::Ptr executor;
+            executor::ParallelTransactionExecutorInterface::Ptr executor;
             if (executorIt != m_contract2ExecutorInfo.end())
             {
                 executor = executorIt->second->executor;
@@ -66,7 +66,7 @@ private:
         using Ptr = std::shared_ptr<ExecutorInfo>;
 
         std::string name;
-        bcos::executor::ParallelExecutorInterface::Ptr executor;
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor;
         std::set<std::string> contracts;
     };
 

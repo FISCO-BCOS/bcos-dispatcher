@@ -1,5 +1,5 @@
 #include "../bcos-dispatcher/ExecutorManager.h"
-#include "interfaces/executor/ParallelExecutorInterface.h"
+#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "libutilities/Common.h"
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -8,38 +8,61 @@ namespace bcos::test
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-class FakeParallelExecutor : public bcos::executor::ParallelExecutorInterface
+class FakeParallelExecutor : public bcos::executor::ParallelTransactionExecutorInterface
 {
 public:
     FakeParallelExecutor(const std::string& name) : m_name(name) {}
 
     const std::string& name() const { return m_name; }
 
-    // Prepare block header
-    void start(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
-        std::function<void(const bcos::Error::ConstPtr&)> callback) noexcept override
+    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+        std::function<void(bcos::Error::UniquePtr&&)> callback) noexcept override
     {}
 
-    void executeTransaction(const std::string_view& to,
-        const bcos::protocol::ExecutionParams::ConstPtr& input,
-        std::function<void(const bcos::Error::ConstPtr&, bcos::protocol::ExecutionResult::Ptr&&)>
+    void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback) noexcept override
     {}
 
-    // Write data to storage, return all contract's change hash
-    void commit(bcos::protocol::BlockNumber blockNumber,
+    void dagExecuteTransactions(
+        const gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>& inputs,
         std::function<void(
-            const bcos::Error::ConstPtr&, std::vector<bcos::executor::ContractStatus::Ptr>&&)>
+            bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
             callback) noexcept override
     {}
 
-    // drop current changes
-    void rollback(bcos::protocol::BlockNumber blockNumber,
-        std::function<void(const bcos::Error::ConstPtr&)> callback) noexcept override
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+            callback) noexcept override
     {}
+
+    void getTableHashes(bcos::protocol::BlockNumber number,
+        std::function<void(
+            bcos::Error::UniquePtr&&, std::vector<std::tuple<std::string, crypto::HashType>>&&)>
+            callback) noexcept override
+    {}
+
+    /* ----- XA Transaction interface Start ----- */
+
+    // Write data to storage uncommitted
+    void prepare(const TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
+    {}
+
+    // Commit uncommitted data
+    void commit(const TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
+    {}
+
+    // Rollback the changes
+    void rollback(const TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
+    {}
+
+    /* ----- XA Transaction interface End ----- */
 
     // drop all status
-    void reset(std::function<void(const bcos::Error::ConstPtr&)>) noexcept override {}
+    void reset(std::function<void(bcos::Error::Ptr&&)> callback) noexcept override {}
 
     std::string m_name;
 };
@@ -126,7 +149,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
 
     auto executors4 = executorManager->dispatchExecutor(contracts2.begin(), contracts2.end());
 
-    std::map<std::string, executor::ParallelExecutorInterface::Ptr> contract2executor;
+    std::map<std::string, executor::ParallelTransactionExecutorInterface::Ptr> contract2executor;
     for (size_t i = 0; i < contracts2.size(); ++i)
     {
         contract2executor.insert({contracts2[i], executors4[i]});

@@ -44,6 +44,12 @@ install(
     FILES_MATCHING PATTERN "*.h"
 )
 
+install(
+    DIRECTORY "bcos-scheduler"
+    DESTINATION "${DESTINATION_INCLUDE_DIR}"
+    FILES_MATCHING PATTERN "*.h"
+)
+
 if(TESTS)
     enable_testing()
     add_subdirectory(tests)
