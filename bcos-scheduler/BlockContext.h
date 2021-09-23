@@ -4,9 +4,7 @@
 #include "interfaces/protocol/BlockHeader.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 
-namespace bcos
-{
-namespace dispatcher
+namespace bcos::dispatcher
 {
 class BlockContext
 {
@@ -22,9 +20,10 @@ public:
 
     BlockContext(bcos::protocol::Block::Ptr block) : m_block(std::move(block)) {}
 
+    Status status() { return m_status; }
+
 private:
     Status m_status;
     bcos::protocol::Block::Ptr m_block;
 };
-}  // namespace dispatcher
-}  // namespace bcos
+}  // namespace bcos::dispatcher

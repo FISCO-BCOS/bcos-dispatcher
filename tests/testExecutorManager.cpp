@@ -42,26 +42,18 @@ public:
             callback) noexcept override
     {}
 
-    /* ----- XA Transaction interface Start ----- */
-
-    // Write data to storage uncommitted
     void prepare(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
     {}
 
-    // Commit uncommitted data
     void commit(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
     {}
 
-    // Rollback the changes
     void rollback(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
     {}
 
-    /* ----- XA Transaction interface End ----- */
-
-    // drop all status
     void reset(std::function<void(bcos::Error::Ptr&&)> callback) noexcept override {}
 
     std::string m_name;
@@ -107,7 +99,11 @@ BOOST_AUTO_TEST_CASE(dispatch)
         contracts.push_back(boost::lexical_cast<std::string>(i));
     }
 
-    auto executors = executorManager->dispatchExecutor(contracts);
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors;
+    for (auto& it : contracts)
+    {
+        executors.push_back(executorManager->dispatchExecutor(it));
+    }
     BOOST_CHECK_EQUAL(executors.size(), 100);
 
     std::map<std::string, int> executor2count{
@@ -122,7 +118,11 @@ BOOST_AUTO_TEST_CASE(dispatch)
     BOOST_CHECK_EQUAL(executor2count["3"], 25);
     BOOST_CHECK_EQUAL(executor2count["4"], 25);
 
-    auto executors2 = executorManager->dispatchExecutor(contracts);
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors2;
+    for (auto& it : contracts)
+    {
+        executors2.push_back(executorManager->dispatchExecutor(it));
+    }
     BOOST_CHECK_EQUAL_COLLECTIONS(
         executors.begin(), executors.end(), executors2.begin(), executors2.end());
 
@@ -134,7 +134,11 @@ BOOST_AUTO_TEST_CASE(dispatch)
 
     contracts2.insert(contracts2.end(), contracts.begin(), contracts.end());
 
-    auto executors3 = executorManager->dispatchExecutor(contracts2);
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors3;
+    for (auto& it : contracts2)
+    {
+        executors3.push_back(executorManager->dispatchExecutor(it));
+    }
     std::map<std::string, int> executor2count2{
         std::pair("1", 0), std::pair("2", 0), std::pair("3", 0), std::pair("4", 0)};
     for (auto it = executors3.begin(); it != executors3.end(); ++it)
@@ -147,7 +151,11 @@ BOOST_AUTO_TEST_CASE(dispatch)
     BOOST_CHECK_EQUAL(executor2count2["3"], 35);
     BOOST_CHECK_EQUAL(executor2count2["4"], 35);
 
-    auto executors4 = executorManager->dispatchExecutor(contracts2);
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors4;
+    for (auto& it : contracts2)
+    {
+        executors4.push_back(executorManager->dispatchExecutor(it));
+    }
 
     std::map<std::string, executor::ParallelTransactionExecutorInterface::Ptr> contract2executor;
     for (size_t i = 0; i < contracts2.size(); ++i)
@@ -180,7 +188,12 @@ BOOST_AUTO_TEST_CASE(dispatch)
     }
 
     contracts2.insert(contracts2.end(), contracts3.begin(), contracts3.end());
-    auto executors5 = executorManager->dispatchExecutor(contracts2);
+
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors5;
+    for (auto& it : contracts2)
+    {
+        executors5.push_back(executorManager->dispatchExecutor(it));
+    }
     BOOST_CHECK_EQUAL(executors5.size(), 150);
 
     size_t oldContract = 0;

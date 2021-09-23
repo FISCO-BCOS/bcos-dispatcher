@@ -8,6 +8,7 @@
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <iterator>
+#include <queue>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -22,8 +23,8 @@ public:
     void addExecutor(std::string name,
         const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor);
 
-    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> dispatchExecutor(
-        boost::any_range<std::string_view, boost::random_access_traversal_tag> contracts);
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
+        std::string_view contract);
 
     void removeExecutor(const std::string_view& name);
 
@@ -43,15 +44,15 @@ private:
         {
             return lhs->contracts.size() > rhs->contracts.size();
         }
-    } m_executorComp;
+    };
 
     tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
         m_contract2ExecutorInfo;
-    tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
-        m_name2Executors;
-    std::shared_mutex m_mutex;
 
-    std::vector<ExecutorInfo::Ptr> m_executorsHeap;
-    std::shared_mutex m_heapMutex;
+    std::unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
+        m_name2Executors;
+    std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>
+        m_executorQueue;
+    std::shared_mutex m_mutex;
 };
 }  // namespace bcos::dispatcher

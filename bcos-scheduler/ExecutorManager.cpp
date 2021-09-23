@@ -3,18 +3,19 @@
 #include <tbb/parallel_sort.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <mutex>
+#include <thread>
 
 using namespace bcos::dispatcher;
 
 void ExecutorManager::addExecutor(
     std::string name, const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor)
 {
-    std::unique_lock lock(m_mutex);
-
     auto executorInfo = std::make_shared<ExecutorInfo>();
     executorInfo->name = std::move(name);
     executorInfo->executor = executor;
 
+    std::unique_lock lock(m_mutex);
     auto [it, exists] = m_name2Executors.emplace(executorInfo->name, executorInfo);
 
     if (!exists)
@@ -22,46 +23,41 @@ void ExecutorManager::addExecutor(
         BOOST_THROW_EXCEPTION(bcos::Exception("Executor already exists"));
     }
 
-    m_executorsHeap.push_back(executorInfo);
-    std::push_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
+    m_executorQueue.push(executorInfo);
 }
 
-std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr>
-ExecutorManager::dispatchExecutor(
-    boost::any_range<std::string_view, boost::random_access_traversal_tag> contracts)
+bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispatchExecutor(
+    std::string_view contract)
 {
-    std::unique_lock lock(m_mutex);
+    executor::ParallelTransactionExecutorInterface::Ptr executor;
 
-    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> result;
-    result.reserve(contracts.size());
-
-    for (auto& it : contracts)
+    do
     {
-        auto executorIt = m_contract2ExecutorInfo.find(it);
-
-        executor::ParallelTransactionExecutorInterface::Ptr executor;
+        auto executorIt = m_contract2ExecutorInfo.find(contract);
         if (executorIt != m_contract2ExecutorInfo.end())
         {
             executor = executorIt->second->executor;
         }
         else
         {
-            std::pop_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
-            auto executorInfo = m_executorsHeap.back();
+            std::unique_lock lock(m_mutex, std::try_to_lock);
+            if (!lock.owns_lock())
+            {
+                continue;
+            }
 
-            auto [contractIt, success] = executorInfo->contracts.insert(std::string(it));
+            auto executorInfo = m_executorQueue.top();
+
+            auto [contractIt, success] = executorInfo->contracts.insert(std::string(contract));
             (void)success;
-            std::push_heap(m_executorsHeap.begin(), m_executorsHeap.end(), m_executorComp);
 
-            (void)m_contract2ExecutorInfo.insert({*contractIt, executorInfo});
+            (void)m_contract2ExecutorInfo.emplace(executorInfo->name, executorInfo);
 
             executor = executorInfo->executor;
         }
+    } while (false);
 
-        result.push_back(executor);
-    }
-
-    return result;
+    return executor;
 }
 
 void ExecutorManager::removeExecutor(const std::string_view& name)
@@ -83,27 +79,18 @@ void ExecutorManager::removeExecutor(const std::string_view& name)
             }
         }
 
-        m_name2Executors.unsafe_erase(it);
+        m_name2Executors.erase(it);
+
+        m_executorQueue = std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>,
+            ExecutorInfoComp>();
+
+        for (auto& it : m_name2Executors)
+        {
+            m_executorQueue.push(it.second);
+        }
     }
     else
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Not found executor: " + std::string(name)));
-    }
-
-    bool deleted = false;
-    for (auto heapIt = m_executorsHeap.begin(); heapIt != m_executorsHeap.end(); ++heapIt)
-    {
-        std::cout << "origin: " << (*heapIt)->name << " target: " << name << std::endl;
-        if ((*heapIt)->name == name)
-        {
-            m_executorsHeap.erase(heapIt);
-            deleted = true;
-            break;
-        }
-    }
-
-    if (!deleted)
-    {
-        BOOST_THROW_EXCEPTION(bcos::Exception("Can't find executor in heap"));
     }
 }

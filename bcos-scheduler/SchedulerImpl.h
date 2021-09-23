@@ -7,9 +7,7 @@
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <list>
 
-namespace bcos
-{
-namespace dispatcher
+namespace bcos::dispatcher
 {
 class SchedulerImpl : public SchedulerInterface
 {
@@ -49,5 +47,4 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
 };
-}  // namespace dispatcher
-}  // namespace bcos
+}  // namespace bcos::dispatcher
