@@ -27,7 +27,7 @@ void ExecutorManager::addExecutor(
 }
 
 bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispatchExecutor(
-    std::string_view contract)
+    const std::string_view& contract)
 {
     executor::ParallelTransactionExecutorInterface::Ptr executor;
 
@@ -47,11 +47,16 @@ bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispa
             }
 
             auto executorInfo = m_executorQueue.top();
+            m_executorQueue.pop();
 
-            auto [contractIt, success] = executorInfo->contracts.insert(std::string(contract));
-            (void)success;
+            auto [contractStr, success] = executorInfo->contracts.insert(std::string(contract));
+            if (!success)
+            {
+                BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Insert into contracts fail!"));
+            }
+            m_executorQueue.push(executorInfo);
 
-            (void)m_contract2ExecutorInfo.emplace(executorInfo->name, executorInfo);
+            (void)m_contract2ExecutorInfo.emplace(*contractStr, executorInfo);
 
             executor = executorInfo->executor;
         }

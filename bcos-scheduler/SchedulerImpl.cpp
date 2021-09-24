@@ -1,10 +1,16 @@
 #include "SchedulerImpl.h"
+#include "Common.h"
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos::dispatcher;
 
 void SchedulerImpl::executeBlock(const bcos::protocol::Block::ConstPtr& block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) noexcept
 {
+    if (m_blockContexts.empty())
+    {
+    }
+
     (void)block;
     (void)verify;
     (void)callback;
@@ -37,8 +43,19 @@ void SchedulerImpl::registerExecutor(const std::string& name,
     const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor,
     std::function<void(Error::Ptr&&)> callback) noexcept
 {
-    m_executorManager->addExecutor(name, executor);
+    try
+    {
+        SCHEDULER_LOG(INFO) << "registerExecutor request: " << LOG_KV("name", name);
+        m_executorManager->addExecutor(name, executor);
+    }
+    catch (std::exception& e)
+    {
+        SCHEDULER_LOG(ERROR) << "registerExecutor error: " << boost::diagnostic_information(e);
+        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "addExecutor error", e));
+        return;
+    }
 
+    SCHEDULER_LOG(INFO) << "registerExecutor success";
     callback(nullptr);
 }
 

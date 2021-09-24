@@ -24,7 +24,7 @@ public:
         const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor);
 
     bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
-        std::string_view contract);
+        const std::string_view& contract);
 
     void removeExecutor(const std::string_view& name);
 

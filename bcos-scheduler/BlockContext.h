@@ -12,18 +12,28 @@ public:
     using Ptr = std::shared_ptr<BlockContext>;
     using ConstPtr = std::shared_ptr<const BlockContext>;
 
-    enum Status
+    enum Status : int8_t
     {
+        IDLE,
         EXECUTING,
         FINISHED,
     };
 
-    BlockContext(bcos::protocol::Block::Ptr block) : m_block(std::move(block)) {}
+    BlockContext(bcos::protocol::Block::ConstPtr block,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
+      : m_block(std::move(block)), m_callback(std::move(callback))
+    {}
+
+    void startExecute();
+
+    bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
     Status status() { return m_status; }
+    void setStatus(Status status) { m_status = status; }
 
 private:
-    Status m_status;
-    bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::Block::ConstPtr m_block;
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> m_callback;
+    Status m_status = IDLE;
 };
 }  // namespace bcos::dispatcher

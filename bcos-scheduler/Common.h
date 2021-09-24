@@ -1,0 +1,3 @@
+#pragma once
+
+#define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
