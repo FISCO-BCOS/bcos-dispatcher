@@ -13,7 +13,9 @@
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <forward_list>
+#include <mutex>
 #include <stack>
+#include <thread>
 
 namespace bcos::scheduler
 {
@@ -44,17 +46,27 @@ private:
 
     struct BatchState
     {
+        int64_t contextID;
         std::stack<int64_t> callStack;
         std::forward_list<int64_t> callHistory;
         bcos::protocol::ExecutionMessage::UniquePtr message;
-        bcos::protocol::TransactionReceipt::Ptr receipt;
+        int64_t m_currentSeq = 0;
+    };
+
+    struct KeyLock
+    {
+        int64_t contextID;
+        std::atomic_int64_t count;
     };
 
     bcos::protocol::Block::ConstPtr m_block;
-    std::vector<BatchState> m_batchStates;
 
-    std::unordered_set<std::string_view> m_calledContract;
-    tbb::concurrent_unordered_set<std::string_view> m_keyLocks;
+    std::list<BatchState> m_batchStates;
+
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> m_receipts;
+
+    std::set<std::string, std::less<>> m_calledContract;
+    tbb::concurrent_unordered_map<std::string, KeyLock> m_keyLocks;
 
     Status m_status = IDLE;
     ExecutorManager::Ptr m_executorManager;

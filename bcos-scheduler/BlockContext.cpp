@@ -14,7 +14,6 @@ void BlockContext::asyncExecute(std::function<void(Error::UniquePtr&&)> callback
         return;
     }
 
-    m_batchStates.resize(m_block->transactionsMetaDataSize());
     for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
     {
         auto metaData = m_block->transactionMetaData(i);
@@ -39,32 +38,81 @@ void BlockContext::asyncExecute(std::function<void(Error::UniquePtr&&)> callback
 
 void BlockContext::runBatch(std::function<void(Error::UniquePtr&&)> callback)
 {
-    size_t index = 0;
-    for (auto& it : m_batchStates)
+    for (auto it = m_batchStates.begin(); it != m_batchStates.end(); ++it)
     {
-        auto executor = m_executorManager->dispatchExecutor(it.message->to());
+        if (m_calledContract.find(it->message->to()) != m_calledContract.end())
+        {
+            continue;  // Another context processing
+        }
 
+        m_calledContract.emplace(it->message->to());
+        switch (it->message->type())
+        {
+        case protocol::ExecutionMessage::TXHASH:
+        case protocol::ExecutionMessage::MESSAGE:
+        {
+            auto seq = it->m_currentSeq++;
+
+            it->callStack.push(seq);
+            it->callHistory.push_front(seq);
+            break;
+        }
+        case protocol::ExecutionMessage::FINISHED:
+        case protocol::ExecutionMessage::REVERT:
+        {
+            it->callStack.pop();
+
+            if (it->callStack.empty())
+            {
+                // TODO: Execution is finished, generate receipt
+                // m_receipts[it->contextID] = m_transactionReceiptFactory->createReceipt();
+                it = m_batchStates.erase(it);
+                continue;
+            }
+
+            break;
+        }
+        case protocol::ExecutionMessage::WAIT_KEY:
+        {
+            auto keyIt = m_keyLocks.find(it->message->keyLocks()[0]);
+            if (keyIt != m_keyLocks.end() && keyIt->second.count > 0 &&
+                keyIt->second.contextID != it->contextID)
+            {
+                continue;  // Request key is locking
+            }
+            break;
+        }
+        case protocol::ExecutionMessage::SEND_BACK:
+        {
+            it->message->setType(protocol::ExecutionMessage::TXHASH);
+            break;
+        }
+        }
+
+        auto executor = m_executorManager->dispatchExecutor(it->message->to());
         executor->executeTransaction(
-            std::move(it), [responseIt = std::move(responseIt)](bcos::Error::UniquePtr&& error,
-                               bcos::protocol::ExecutionMessage::UniquePtr&& response) {
+            std::move(it->message), [this, it](bcos::Error::UniquePtr&& error,
+                                        bcos::protocol::ExecutionMessage::UniquePtr&& response) {
                 if (error)
                 {
                     // TODO: handle error
                 }
 
-                switch (response->type())
-                {
-                case protocol::ExecutionMessage::TXHASH:
-                {
-                    // TODO: handle error
-                    break;
-                }
-                case bcos::protocol::ExecutionMessage::MESSAGE:
-                {
-                    break;
-                }
-                }
-                *responseIt = std::move(response);
-            })
+                it->message = std::move(response);
+
+                // switch (response->type())
+                // {
+                // case protocol::ExecutionMessage::TXHASH:
+                // {
+                //     // TODO: handle error
+                //     break;
+                // }
+                // case bcos::protocol::ExecutionMessage::MESSAGE:
+                // {
+                //     break;
+                // }
+                // }
+                // *responseIt = std::move(response);
+            });
     }
 }
