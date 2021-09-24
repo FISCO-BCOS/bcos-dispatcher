@@ -2,14 +2,31 @@
 #include "Common.h"
 #include <boost/exception/diagnostic_information.hpp>
 
-using namespace bcos::dispatcher;
+using namespace bcos::scheduler;
 
 void SchedulerImpl::executeBlock(const bcos::protocol::Block::ConstPtr& block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) noexcept
 {
-    if (m_blockContexts.empty())
+    if (!m_blockContexts.empty())
     {
+        // Check if the block number is valid
+        auto currentBlockContext = m_blockContexts.back();
+
+        if (block->blockHeaderConst()->number() - currentBlockContext->number() != 1)
+        {
+            // wrong number
+            callback(BCOS_ERROR_PTR(-1,
+                         "Wrong request block number: " +
+                             boost::lexical_cast<std::string>(block->blockHeaderConst()->number()) +
+                             " current number: " +
+                             boost::lexical_cast<std::string>(currentBlockContext->number())),
+                nullptr);
+
+            return;
+        }
     }
+
+    auto blockContext = std::make_shared<BlockContext>(block);
 
     (void)block;
     (void)verify;

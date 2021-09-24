@@ -6,7 +6,7 @@
 #include <mutex>
 #include <thread>
 
-using namespace bcos::dispatcher;
+using namespace bcos::scheduler;
 
 void ExecutorManager::addExecutor(
     std::string name, const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor)

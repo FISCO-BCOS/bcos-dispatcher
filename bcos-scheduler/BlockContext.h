@@ -1,10 +1,11 @@
 #pragma once
 
+#include "bcos-framework/libutilities/Error.h"
 #include "interfaces/protocol/Block.h"
 #include "interfaces/protocol/BlockHeader.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 
-namespace bcos::dispatcher
+namespace bcos::scheduler
 {
 class BlockContext
 {
@@ -19,21 +20,19 @@ public:
         FINISHED,
     };
 
-    BlockContext(bcos::protocol::Block::ConstPtr block,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
-      : m_block(std::move(block)), m_callback(std::move(callback))
-    {}
+    BlockContext(bcos::protocol::Block::ConstPtr block) : m_block(std::move(block)) {}
 
-    void startExecute();
+    void asyncExecute(std::function<void(Error::UniquePtr&&)> callback) noexcept;
 
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+
+    void startExecute(std::function<void(bcos::Error::UniquePtr&&)> callback);
 
     Status status() { return m_status; }
     void setStatus(Status status) { m_status = status; }
 
 private:
     bcos::protocol::Block::ConstPtr m_block;
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> m_callback;
     Status m_status = IDLE;
 };
-}  // namespace bcos::dispatcher
+}  // namespace bcos::scheduler

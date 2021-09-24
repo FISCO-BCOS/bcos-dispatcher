@@ -62,9 +62,9 @@ public:
 
 struct ExecutorManagerFixture
 {
-    ExecutorManagerFixture() { executorManager = std::make_shared<dispatcher::ExecutorManager>(); }
+    ExecutorManagerFixture() { executorManager = std::make_shared<scheduler::ExecutorManager>(); }
 
-    dispatcher::ExecutorManager::Ptr executorManager;
+    scheduler::ExecutorManager::Ptr executorManager;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutorManager, ExecutorManagerFixture)

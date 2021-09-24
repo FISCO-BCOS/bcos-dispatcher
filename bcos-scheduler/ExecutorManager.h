@@ -13,7 +13,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace bcos::dispatcher
+namespace bcos::scheduler
 {
 class ExecutorManager
 {

@@ -5,9 +5,10 @@
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <tbb/concurrent_queue.h>
 #include <list>
 
-namespace bcos::dispatcher
+namespace bcos::scheduler
 {
 class SchedulerImpl : public SchedulerInterface
 {
@@ -42,6 +43,7 @@ public:
 
 private:
     std::list<BlockContext::Ptr> m_blockContexts;
+    tbb::concurrent_queue<BlockContext::Ptr> m_blockQueue;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
