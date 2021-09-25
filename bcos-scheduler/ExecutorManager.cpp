@@ -9,11 +9,11 @@
 using namespace bcos::scheduler;
 
 void ExecutorManager::addExecutor(
-    std::string name, const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor)
+    std::string name, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
     auto executorInfo = std::make_shared<ExecutorInfo>();
     executorInfo->name = std::move(name);
-    executorInfo->executor = executor;
+    executorInfo->executor = std::move(executor);
 
     std::unique_lock lock(m_mutex);
     auto [it, exists] = m_name2Executors.emplace(executorInfo->name, executorInfo);
@@ -23,20 +23,18 @@ void ExecutorManager::addExecutor(
         BOOST_THROW_EXCEPTION(bcos::Exception("Executor already exists"));
     }
 
-    m_executorQueue.push(executorInfo);
+    m_executorPriorityQueue.emplace(std::move(executorInfo));
 }
 
 bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispatchExecutor(
     const std::string_view& contract)
 {
-    executor::ParallelTransactionExecutorInterface::Ptr executor;
-
-    do
+    while (true)
     {
         auto executorIt = m_contract2ExecutorInfo.find(contract);
         if (executorIt != m_contract2ExecutorInfo.end())
         {
-            executor = executorIt->second->executor;
+            return executorIt->second->executor;
         }
         else
         {
@@ -46,23 +44,21 @@ bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispa
                 continue;
             }
 
-            auto executorInfo = m_executorQueue.top();
-            m_executorQueue.pop();
+            auto executorInfo = m_executorPriorityQueue.top();
+            m_executorPriorityQueue.pop();
 
             auto [contractStr, success] = executorInfo->contracts.insert(std::string(contract));
             if (!success)
             {
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Insert into contracts fail!"));
             }
-            m_executorQueue.push(executorInfo);
+            m_executorPriorityQueue.push(executorInfo);
 
             (void)m_contract2ExecutorInfo.emplace(*contractStr, executorInfo);
 
-            executor = executorInfo->executor;
+            return executorInfo->executor;
         }
-    } while (false);
-
-    return executor;
+    }
 }
 
 void ExecutorManager::removeExecutor(const std::string_view& name)
@@ -86,12 +82,12 @@ void ExecutorManager::removeExecutor(const std::string_view& name)
 
         m_name2Executors.erase(it);
 
-        m_executorQueue = std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>,
-            ExecutorInfoComp>();
+        m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
+            std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
 
         for (auto& it : m_name2Executors)
         {
-            m_executorQueue.push(it.second);
+            m_executorPriorityQueue.push(it.second);
         }
     }
     else

@@ -44,11 +44,13 @@ public:
 private:
     void runBatch(std::function<void(Error::UniquePtr&&)> callback);
 
-    struct BatchState
+    struct ExecutiveState
     {
+        ExecutiveState(int64_t _contextID) : contextID(_contextID) {}
+
         int64_t contextID;
         std::stack<int64_t> callStack;
-        std::forward_list<int64_t> callHistory;
+        std::list<int64_t> callHistory;
         bcos::protocol::ExecutionMessage::UniquePtr message;
         int64_t m_currentSeq = 0;
     };
@@ -61,8 +63,7 @@ private:
 
     bcos::protocol::Block::ConstPtr m_block;
 
-    std::list<BatchState> m_batchStates;
-
+    std::list<ExecutiveState> m_executiveStates;
     std::vector<bcos::protocol::TransactionReceipt::Ptr> m_receipts;
 
     std::set<std::string, std::less<>> m_calledContract;
