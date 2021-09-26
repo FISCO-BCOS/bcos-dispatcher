@@ -26,7 +26,8 @@ void SchedulerImpl::executeBlock(const bcos::protocol::Block::ConstPtr& block, b
         }
     }
 
-    auto blockContext = std::make_shared<BlockContext>(block);
+    auto blockContext = std::make_shared<BlockExecutive>(block, m_executorManager,
+        m_executionMessageFactory, m_transactionReceiptFactory, m_blockHeaderFactory);
 
     (void)block;
     (void)verify;

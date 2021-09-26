@@ -7,6 +7,7 @@
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/libutilities/Error.h"
 #include "bcos-scheduler/ExecutorManager.h"
+#include "interfaces/protocol/BlockHeaderFactory.h"
 #include "interfaces/protocol/TransactionMetaData.h"
 #include "interfaces/protocol/TransactionReceiptFactory.h"
 #include <tbb/concurrent_unordered_map.h>
@@ -19,11 +20,11 @@
 
 namespace bcos::scheduler
 {
-class BlockContext
+class BlockExecutive
 {
 public:
-    using Ptr = std::shared_ptr<BlockContext>;
-    using ConstPtr = std::shared_ptr<const BlockContext>;
+    using Ptr = std::shared_ptr<BlockExecutive>;
+    using ConstPtr = std::shared_ptr<const BlockExecutive>;
 
     enum Status : int8_t
     {
@@ -32,7 +33,16 @@ public:
         FINISHED,
     };
 
-    BlockContext(bcos::protocol::Block::ConstPtr block) : m_block(std::move(block)) {}
+    BlockExecutive(bcos::protocol::Block::ConstPtr block, ExecutorManager::Ptr executorManager,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory,
+        bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory)
+      : m_block(std::move(block)),
+        m_executorManager(std::move(executorManager)),
+        m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_transactionReceiptFactory(std::move(transactionReceiptFactory)),
+        m_blockHeaderFactory(std::move(blockHeaderFactory))
+    {}
 
     void asyncExecute(std::function<void(Error::UniquePtr&&)> callback) noexcept;
 
@@ -42,7 +52,18 @@ public:
     void setStatus(Status status) { m_status = status; }
 
 private:
-    void runBatch(std::function<void(Error::UniquePtr&&)> callback);
+    struct BatchStatus
+    {
+        std::atomic_size_t total = 0;
+        std::atomic_size_t received = 0;
+
+        std::function<void(Error::UniquePtr&&)> callback;
+        std::atomic_bool callbackExecuted = false;
+        std::atomic_bool allSended = false;
+    };
+    void startBatch(std::function<void(Error::UniquePtr&&)> callback);
+    void checkBatch(BatchStatus& status);
+    protocol::BlockHeader::Ptr generateResultBlockHeader();
 
     struct ExecutiveState
     {
@@ -52,27 +73,30 @@ private:
         std::stack<int64_t> callStack;
         std::list<int64_t> callHistory;
         bcos::protocol::ExecutionMessage::UniquePtr message;
+        bcos::Error::UniquePtr error;
         int64_t m_currentSeq = 0;
     };
+    struct ExecutiveResult
+    {
+        bcos::protocol::TransactionReceipt::Ptr receipt;
+    };
+    std::list<ExecutiveState> m_executiveStates;
+    std::vector<ExecutiveResult> m_executiveResults;
 
+    std::set<std::string, std::less<>> m_calledContract;
     struct KeyLock
     {
         int64_t contextID;
         std::atomic_int64_t count;
     };
-
-    bcos::protocol::Block::ConstPtr m_block;
-
-    std::list<ExecutiveState> m_executiveStates;
-    std::vector<bcos::protocol::TransactionReceipt::Ptr> m_receipts;
-
-    std::set<std::string, std::less<>> m_calledContract;
     tbb::concurrent_unordered_map<std::string, KeyLock> m_keyLocks;
 
     Status m_status = IDLE;
+    bcos::protocol::Block::ConstPtr m_block;
     ExecutorManager::Ptr m_executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::protocol::TransactionReceiptFactory::Ptr m_transactionReceiptFactory;
+    bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;
 
     int64_t m_seqCount = 0;
 };
