@@ -217,5 +217,10 @@ void BlockExecutive::checkBatch(BatchStatus& status)
 
 bcos::protocol::BlockHeader::Ptr BlockExecutive::generateResultBlockHeader()
 {
-    return nullptr;
+    auto blockHeader =
+        m_blockHeaderFactory->createBlockHeader(m_block->blockHeaderConst()->number());
+
+    // blockHeader->setStateRoot(const bcos::crypto::HashType &_stateRoot);
+
+    return blockHeader;
 }
