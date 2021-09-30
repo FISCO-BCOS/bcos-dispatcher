@@ -65,7 +65,7 @@ private:
     void checkBatch(BatchStatus& status);
     protocol::BlockHeader::Ptr generateResultBlockHeader();
 
-    struct ExecutiveState
+    struct ExecutiveState  // Executive state per tx
     {
         ExecutiveState(int64_t _contextID) : contextID(_contextID) {}
 
@@ -75,6 +75,7 @@ private:
         bcos::protocol::ExecutionMessage::UniquePtr message;
         bcos::Error::UniquePtr error;
         int64_t m_currentSeq = 0;
+        std::set<std::string> keyLocks;
     };
     struct ExecutiveResult
     {
@@ -84,6 +85,7 @@ private:
     std::vector<ExecutiveResult> m_executiveResults;
 
     std::set<std::string, std::less<>> m_calledContract;
+
     struct KeyLock
     {
         int64_t contextID;
