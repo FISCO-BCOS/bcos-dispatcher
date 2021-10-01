@@ -52,7 +52,7 @@ public:
     void setStatus(Status status) { m_status = status; }
 
 private:
-    struct BatchStatus
+    struct BatchStatus  // Batch state per batch
     {
         std::atomic_size_t total = 0;
         std::atomic_size_t received = 0;
@@ -74,8 +74,8 @@ private:
         std::list<int64_t> callHistory;
         bcos::protocol::ExecutionMessage::UniquePtr message;
         bcos::Error::UniquePtr error;
-        int64_t m_currentSeq = 0;
-        std::set<std::string> keyLocks;
+        int64_t currentSeq = 0;
+        std::set<std::tuple<std::string, std::string>> keyLocks;
     };
     struct ExecutiveResult
     {

@@ -93,7 +93,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         case protocol::ExecutionMessage::TXHASH:
         case protocol::ExecutionMessage::MESSAGE:
         {
-            auto seq = it->m_currentSeq++;
+            auto seq = it->currentSeq++;
 
             it->callStack.push(seq);
             it->callHistory.push_front(seq);
