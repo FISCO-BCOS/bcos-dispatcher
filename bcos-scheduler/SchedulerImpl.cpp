@@ -1,45 +1,101 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
+#include "libutilities/Error.h"
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/throw_exception.hpp>
+#include <mutex>
 
 using namespace bcos::scheduler;
 
 void SchedulerImpl::executeBlock(const bcos::protocol::Block::ConstPtr& block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) noexcept
 {
-    if (!m_blockContexts.empty())
+    SCHEDULER_LOG(INFO) << "ExecuteBlock request"
+                        << LOG_KV("block number", block->blockHeaderConst()->number())
+                        << LOG_KV("verify", verify);
+
     {
-        // Check if the block number is valid
-        auto currentBlockContext = m_blockContexts.back();
-
-        if (block->blockHeaderConst()->number() - currentBlockContext->number() != 1)
+        std::scoped_lock<std::mutex> lock(m_blockContextsMutex);
+        if (!m_blocks.empty())
         {
-            // wrong number
-            callback(BCOS_ERROR_PTR(-1,
-                         "Wrong request block number: " +
-                             boost::lexical_cast<std::string>(block->blockHeaderConst()->number()) +
-                             " current number: " +
-                             boost::lexical_cast<std::string>(currentBlockContext->number())),
-                nullptr);
+            // Check if the block number is valid
+            auto& currentBlockContext = std::get<0>(m_blocks.back());
 
-            return;
+            if (block->blockHeaderConst()->number() - currentBlockContext->number() != 1)
+            {
+                auto message =
+                    "Invalid block number: " +
+                    boost::lexical_cast<std::string>(block->blockHeaderConst()->number()) +
+                    " current number: " +
+                    boost::lexical_cast<std::string>(currentBlockContext->number());
+                SCHEDULER_LOG(ERROR) << "ExecuteBlock error: " << message;
+
+                callback(BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)),
+                    nullptr);
+
+                return;
+            }
         }
+
+        auto blockContext = std::make_unique<BlockExecutive>(block, m_executorManager,
+            m_executionMessageFactory, m_transactionReceiptFactory, m_blockHeaderFactory);
+
+        m_blocks.emplace_back(std::move(blockContext), std::move(callback));
     }
 
-    auto blockContext = std::make_shared<BlockExecutive>(block, m_executorManager,
-        m_executionMessageFactory, m_transactionReceiptFactory, m_blockHeaderFactory);
+    execute();
 
-    (void)block;
-    (void)verify;
-    (void)callback;
+    SCHEDULER_LOG(INFO) << "ExecuteBlock success"
+                        << LOG_KV("block number", block->blockHeaderConst()->number());
 }
 
 // by pbft & sync
 void SchedulerImpl::commitBlock(const bcos::protocol::BlockHeader::ConstPtr& header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback) noexcept
 {
-    (void)header;
-    (void)callback;
+    SCHEDULER_LOG(INFO) << "CommitBlock request" << LOG_KV("block number", header->number());
+
+    {
+        std::scoped_lock<std::mutex> lock(m_blockContextsMutex);
+
+        if (m_blocks.empty())
+        {
+            auto message = "Empty m_blocks";
+
+            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr);
+
+            return;
+        }
+
+        if (m_blockCommitting != m_blocks.end())
+        {
+            auto message = "Another block is committing";
+
+            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
+
+            return;
+        }
+
+        auto it = m_blocks.begin();
+        if (std::get<0>(*it)->number() != header->number())
+        {
+            auto message = "Block mismatch, last executed number: " +
+                           boost::lexical_cast<std::string>(std::get<0>(*it)->number()) +
+                           " request number: " + boost::lexical_cast<std::string>(header->number());
+
+            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
+
+            return;
+        }
+
+        m_blockCommitting = it;
+    }
+
+    // TODO: Commit the block
 }
 
 // by console, query committed committing executing
@@ -87,4 +143,30 @@ void SchedulerImpl::unregisterExecutor(
 void SchedulerImpl::reset(std::function<void(Error::Ptr&&)> callback) noexcept
 {
     (void)callback;
+}
+
+void SchedulerImpl::execute()
+{
+    std::scoped_lock<std::mutex> lock(m_blockContextsMutex);
+    if (m_blockExecuting != m_blocks.end())
+    {
+        // Another execute is running
+        return;
+    }
+
+    if (m_blocks.empty())
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::InvalidBlocks, "No block in m_blocks"));
+    }
+
+    m_blockExecuting = m_blocks.begin();
+
+    std::get<0>(*m_blockExecuting)
+        ->asyncExecute([this](Error::UniquePtr&& error, protocol::BlockHeader::Ptr blockHeader) {
+            std::scoped_lock<std::mutex> lock(m_blockContextsMutex);  // TODO: need recursive_mutex
+
+            ++m_blockExecuting;
+
+            std::get<1> (*m_blockExecuting)(std::move(error), std::move(blockHeader));
+        });
 }

@@ -23,8 +23,7 @@ namespace bcos::scheduler
 class BlockExecutive
 {
 public:
-    using Ptr = std::shared_ptr<BlockExecutive>;
-    using ConstPtr = std::shared_ptr<const BlockExecutive>;
+    using UniquePtr = std::unique_ptr<BlockExecutive>;
 
     enum Status : int8_t
     {
@@ -44,7 +43,8 @@ public:
         m_blockHeaderFactory(std::move(blockHeaderFactory))
     {}
 
-    void asyncExecute(std::function<void(Error::UniquePtr&&)> callback) noexcept;
+    void asyncExecute(
+        std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback) noexcept;
 
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
@@ -70,7 +70,7 @@ private:
         ExecutiveState(int64_t _contextID) : contextID(_contextID) {}
 
         int64_t contextID;
-        std::stack<int64_t> callStack;
+        std::stack<int64_t, std::list<int64_t>> callStack;
         std::list<int64_t> callHistory;
         bcos::protocol::ExecutionMessage::UniquePtr message;
         bcos::Error::UniquePtr error;

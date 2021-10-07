@@ -9,11 +9,12 @@
 
 using namespace bcos::scheduler;
 
-void BlockExecutive::asyncExecute(std::function<void(Error::UniquePtr&&)> callback) noexcept
+void BlockExecutive::asyncExecute(
+    std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback) noexcept
 {
     if (m_status != IDLE)
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::WrongStatus, "Wrong status"));
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr);
         return;
     }
 
@@ -35,7 +36,8 @@ void BlockExecutive::asyncExecute(std::function<void(Error::UniquePtr&&)> callba
     class BatchCallback : public std::enable_shared_from_this<BatchCallback>
     {
     public:
-        BatchCallback(BlockExecutive* self, std::function<void(Error::UniquePtr&&)> callback)
+        BatchCallback(BlockExecutive* self,
+            std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback)
           : m_self(self), m_callback(std::move(callback))
         {}
 
@@ -43,7 +45,8 @@ void BlockExecutive::asyncExecute(std::function<void(Error::UniquePtr&&)> callba
         {
             if (error)
             {
-                m_callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Execute with errors", *error));
+                m_callback(
+                    BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Execute with errors", *error), nullptr);
                 return;
             }
 
@@ -55,12 +58,15 @@ void BlockExecutive::asyncExecute(std::function<void(Error::UniquePtr&&)> callba
             else
             {
                 // All Transaction finished
+                auto header = m_self->generateResultBlockHeader();
+
+                m_callback(nullptr, std::move(header));
             }
         }
 
     private:
         BlockExecutive* m_self;
-        std::function<void(Error::UniquePtr&&)> m_callback;
+        std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> m_callback;
     };
 
     auto batchCallback = std::make_shared<BatchCallback>(this, std::move(callback));

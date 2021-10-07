@@ -42,8 +42,14 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    std::list<BlockExecutive::Ptr> m_blockContexts;
-    tbb::concurrent_queue<BlockExecutive::Ptr> m_blockQueue;
+    std::list<std::tuple<BlockExecutive::UniquePtr,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>>>
+        m_blocks;
+    decltype(m_blocks)::iterator m_blockExecuting;
+    decltype(m_blocks)::iterator m_blockCommitting;
+    std::mutex m_blockContextsMutex;
+
+    void execute();
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;

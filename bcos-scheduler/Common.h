@@ -7,7 +7,9 @@ namespace bcos::scheduler
 enum SchedulerError
 {
     UnknownError = -70000,
-    WrongStatus,
+    InvalidStatus,
+    InvalidBlockNumber,
+    InvalidBlocks,
 };
 
 }  // namespace bcos::scheduler
