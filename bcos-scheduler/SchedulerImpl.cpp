@@ -16,12 +16,18 @@ void SchedulerImpl::executeBlock(const bcos::protocol::Block::ConstPtr& block, b
                         << LOG_KV("verify", verify);
 
     {
+        // TODO: 做哈希的缓存，防止重复执行
+        // 重复的区块，没结果时报错，有结果时返回结果
+        // 结论：（同步、PBFT）串行下发区块
+        // 用区块哈希去重
+
         std::scoped_lock<std::mutex> lock(m_blockContextsMutex);
         if (!m_blocks.empty())
         {
             // Check if the block number is valid
             auto& currentBlockContext = std::get<0>(m_blocks.back());
 
+            // TODO: 已执行 > 当前块高 > 已提交，返回已执行的结果
             if (block->blockHeaderConst()->number() - currentBlockContext->number() != 1)
             {
                 auto message =

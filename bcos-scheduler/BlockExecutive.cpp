@@ -18,6 +18,7 @@ void BlockExecutive::asyncExecute(
         return;
     }
 
+    // TODO: 判断是否是MetaData还是TxData
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
     for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
     {

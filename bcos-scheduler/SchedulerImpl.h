@@ -42,6 +42,7 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
+    // TODO: use struct
     std::list<std::tuple<BlockExecutive::UniquePtr,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>>>
         m_blocks;
