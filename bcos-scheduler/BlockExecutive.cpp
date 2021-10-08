@@ -136,7 +136,9 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         // Retry type, send again
         case protocol::ExecutionMessage::WAIT_KEY:
         {
-            auto keyIt = m_keyLocks.find(it->message->keyLocks()[0]);
+            auto keyIt = m_keyLocks.find(
+                std::string(it->message->keyLockAcquired()));  // TODO: replace tbb with onetbb,
+                                                               // support find with string_view
             if (keyIt != m_keyLocks.end() && keyIt->second.count > 0 &&
                 keyIt->second.contextID != it->contextID)
             {
