@@ -13,13 +13,33 @@ namespace bcos::scheduler
 class SchedulerImpl : public SchedulerInterface
 {
 public:
+    SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory,
+        bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
+        bcos::crypto::Hash::Ptr hashImpl)
+      : m_executorManager(std::move(executorManager)),
+        m_ledger(std::move(ledger)),
+        m_storage(std::move(storage)),
+        m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_transactionReceiptFactory(std::move(transactionReceiptFactory)),
+        m_blockHeaderFactory(std::move(blockHeaderFactory)),
+        m_hashImpl(std::move(hashImpl))
+    {}
+
+    SchedulerImpl(const SchedulerImpl&) = delete;
+    SchedulerImpl(SchedulerImpl&&) = delete;
+    SchedulerImpl& operator=(const SchedulerImpl&) = delete;
+    SchedulerImpl& operator=(SchedulerImpl&&) = delete;
+
     // by pbft & sync
-    void executeBlock(const bcos::protocol::Block::ConstPtr& block, bool verify,
+    void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>
             callback) noexcept override;
 
     // by pbft & sync
-    void commitBlock(const bcos::protocol::BlockHeader::ConstPtr& header,
+    void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)>
             callback) noexcept override;
 
@@ -28,12 +48,12 @@ public:
             callback) noexcept override;
 
     // by rpc
-    void call(const protocol::Transaction::ConstPtr& tx,
+    void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) noexcept override;
 
     // by executor
-    void registerExecutor(const std::string& name,
-        const bcos::executor::ParallelTransactionExecutorInterface::Ptr& executor,
+    void registerExecutor(std::string name,
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
     void unregisterExecutor(
@@ -44,20 +64,18 @@ public:
 private:
     void execute();
 
-    struct QueueItem
+    struct BlockExecuteItem
     {
         BlockExecutive::UniquePtr executive;
-        bcos::protocol::BlockHeader::Ptr result;
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback;
     };
 
-    std::list<QueueItem> m_blocks;
+    std::list<BlockExecuteItem> m_blocks;
     std::mutex m_blocksMutex;
 
     decltype(m_blocks)::iterator m_executing;
     std::mutex m_executeMutex;
 
-    decltype(m_blocks)::iterator m_committing;
     std::mutex m_commitMutex;
 
     ExecutorManager::Ptr m_executorManager;

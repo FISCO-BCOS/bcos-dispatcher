@@ -5,10 +5,10 @@ namespace bcos::test
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-class FakeParallelExecutor : public bcos::executor::ParallelTransactionExecutorInterface
+class MockParallelExecutor : public bcos::executor::ParallelTransactionExecutorInterface
 {
 public:
-    FakeParallelExecutor(const std::string& name) : m_name(name) {}
+    MockParallelExecutor(const std::string& name) : m_name(name) {}
 
     const std::string& name() const { return m_name; }
 
@@ -55,5 +55,5 @@ public:
 
     std::string m_name;
 };
-}  // namespace bcos::test
 #pragma GCC diagnostic pop
+}  // namespace bcos::test

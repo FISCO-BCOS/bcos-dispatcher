@@ -19,26 +19,26 @@ BOOST_FIXTURE_TEST_SUITE(TestExecutorManager, ExecutorManagerFixture)
 BOOST_AUTO_TEST_CASE(addExecutor)
 {
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("1", std::make_shared<FakeParallelExecutor>("1")));
+        executorManager->addExecutor("1", std::make_shared<MockParallelExecutor>("1")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("2", std::make_shared<FakeParallelExecutor>("2")));
+        executorManager->addExecutor("2", std::make_shared<MockParallelExecutor>("2")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")));
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
     BOOST_CHECK_THROW(
-        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")),
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")),
         bcos::Exception);
 }
 
 BOOST_AUTO_TEST_CASE(dispatch)
 {
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("1", std::make_shared<FakeParallelExecutor>("1")));
+        executorManager->addExecutor("1", std::make_shared<MockParallelExecutor>("1")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("2", std::make_shared<FakeParallelExecutor>("2")));
+        executorManager->addExecutor("2", std::make_shared<MockParallelExecutor>("2")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")));
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("4", std::make_shared<FakeParallelExecutor>("4")));
+        executorManager->addExecutor("4", std::make_shared<MockParallelExecutor>("4")));
 
     std::vector<std::string> contracts;
     for (int i = 0; i < 100; ++i)
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
         std::pair("1", 0), std::pair("2", 0), std::pair("3", 0), std::pair("4", 0)};
     for (auto it = executors.begin(); it != executors.end(); ++it)
     {
-        ++executor2count[std::dynamic_pointer_cast<FakeParallelExecutor>(*it)->name()];
+        ++executor2count[std::dynamic_pointer_cast<MockParallelExecutor>(*it)->name()];
     }
 
     BOOST_CHECK_EQUAL(executor2count["1"], 25);
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
         std::pair("1", 0), std::pair("2", 0), std::pair("3", 0), std::pair("4", 0)};
     for (auto it = executors3.begin(); it != executors3.end(); ++it)
     {
-        ++executor2count2[std::dynamic_pointer_cast<FakeParallelExecutor>(*it)->name()];
+        ++executor2count2[std::dynamic_pointer_cast<MockParallelExecutor>(*it)->name()];
     }
 
     BOOST_CHECK_EQUAL(executor2count2["1"], 35);
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(dispatch)
     for (size_t i = 0; i < executors4.size(); ++i)
     {
         auto executor = executors4[i];
-        if (std::dynamic_pointer_cast<FakeParallelExecutor>(executor)->name() == "3")
+        if (std::dynamic_pointer_cast<MockParallelExecutor>(executor)->name() == "3")
         {
             contractsInExecutor3.insert(contracts2[i]);
         }
@@ -162,13 +162,13 @@ BOOST_AUTO_TEST_CASE(dispatch)
 BOOST_AUTO_TEST_CASE(remove)
 {
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("1", std::make_shared<FakeParallelExecutor>("1")));
+        executorManager->addExecutor("1", std::make_shared<MockParallelExecutor>("1")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("2", std::make_shared<FakeParallelExecutor>("2")));
+        executorManager->addExecutor("2", std::make_shared<MockParallelExecutor>("2")));
     BOOST_CHECK_NO_THROW(
-        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")));
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
     BOOST_CHECK_THROW(
-        executorManager->addExecutor("3", std::make_shared<FakeParallelExecutor>("3")),
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")),
         bcos::Exception);
 
     BOOST_CHECK_NO_THROW(executorManager->removeExecutor("2"));

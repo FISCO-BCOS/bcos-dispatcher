@@ -13,7 +13,7 @@ using namespace bcos::scheduler;
 void BlockExecutive::asyncExecute(
     std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback) noexcept
 {
-    if (m_status != IDLE)
+    if (m_result)
     {
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr);
         return;
@@ -102,9 +102,9 @@ void BlockExecutive::asyncExecute(
             else
             {
                 // All Transaction finished
-                auto header = m_self->generateResultBlockHeader();
+                m_self->m_result = m_self->generateResultBlockHeader();
 
-                m_callback(nullptr, std::move(header));
+                m_callback(nullptr, m_self->m_result);
             }
         }
 

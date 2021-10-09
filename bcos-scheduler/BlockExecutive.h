@@ -26,14 +26,7 @@ class BlockExecutive
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
 
-    enum Status : int8_t
-    {
-        IDLE,
-        EXECUTING,
-        FINISHED,
-    };
-
-    BlockExecutive(bcos::protocol::Block::ConstPtr block, ExecutorManager::Ptr executorManager,
+    BlockExecutive(bcos::protocol::Block::Ptr block, ExecutorManager::Ptr executorManager,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory,
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
@@ -56,8 +49,8 @@ public:
 
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
-    Status status() { return m_status; }
-    void setStatus(Status status) { m_status = status; }
+    bcos::protocol::Block::Ptr block() { return m_block; }
+    bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
 private:
     struct BatchStatus  // Batch state per batch
@@ -112,12 +105,13 @@ private:
     size_t m_gasUsed = 0;
     int64_t m_seqCount = 0;
 
-    Status m_status = IDLE;
-    bcos::protocol::Block::ConstPtr m_block;
+    bcos::protocol::Block::Ptr m_block;
     ExecutorManager::Ptr m_executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::protocol::TransactionReceiptFactory::Ptr m_transactionReceiptFactory;
     bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
+
+    bcos::protocol::BlockHeader::Ptr m_result;
 };
 }  // namespace bcos::scheduler
