@@ -42,15 +42,23 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    // TODO: use struct
-    std::list<std::tuple<BlockExecutive::UniquePtr,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>>>
-        m_blocks;
-    decltype(m_blocks)::iterator m_blockExecuting;
-    decltype(m_blocks)::iterator m_blockCommitting;
-    std::mutex m_blockContextsMutex;
-
     void execute();
+
+    struct QueueItem
+    {
+        BlockExecutive::UniquePtr executive;
+        bcos::protocol::BlockHeader::Ptr result;
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback;
+    };
+
+    std::list<QueueItem> m_blocks;
+    std::mutex m_blocksMutex;
+
+    decltype(m_blocks)::iterator m_executing;
+    std::mutex m_executeMutex;
+
+    decltype(m_blocks)::iterator m_committing;
+    std::mutex m_commitMutex;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -58,5 +66,6 @@ private:
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::protocol::TransactionReceiptFactory::Ptr m_transactionReceiptFactory;
     bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
 }  // namespace bcos::scheduler

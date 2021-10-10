@@ -1,4 +1,5 @@
 #include "BlockExecutive.h"
+#include "ChecksumAddress.h"
 #include "bcos-scheduler/Common.h"
 #include "interfaces/executor/ExecutionMessage.h"
 #include "libutilities/Error.h"
@@ -18,20 +19,60 @@ void BlockExecutive::asyncExecute(
         return;
     }
 
-    // TODO: 判断是否是MetaData还是TxData
-    m_executiveResults.resize(m_block->transactionsMetaDataSize());
-    for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
+    if (m_block->transactionsMetaDataSize() > 0)
     {
-        auto metaData = m_block->transactionMetaData(i);
+        m_executiveResults.resize(m_block->transactionsMetaDataSize());
+        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
+        {
+            auto metaData = m_block->transactionMetaData(i);
 
-        auto message = m_executionMessageFactory->createExecutionMessage();
-        message->setType(protocol::ExecutionMessage::TXHASH);
-        message->setTransactionHash(metaData->hash());
+            auto message = m_executionMessageFactory->createExecutionMessage();
+            message->setContextID(i);
+            message->setType(protocol::ExecutionMessage::TXHASH);
+            message->setTransactionHash(metaData->hash());
 
-        message->setTo(std::string(metaData->to()));  // Always readable
+            message->setTo(std::string(metaData->to()));
 
-        m_executiveStates.emplace_back(i);
-        m_executiveStates.back().message.swap(message);
+            m_executiveStates.emplace_back(i, std::move(message));
+        }
+    }
+    else if (m_block->transactionsSize() > 0)
+    {
+        m_executiveResults.resize(m_block->transactionsSize());
+        for (size_t i = 0; i < m_block->transactionsSize(); ++i)
+        {
+            auto tx = m_block->transaction(i);
+
+            auto message = m_executionMessageFactory->createExecutionMessage();
+            message->setType(protocol::ExecutionMessage::MESSAGE);
+            message->setContextID(i);
+
+            std::string sender;
+            sender.reserve(tx->sender().size() * 2);
+            boost::algorithm::hex_lower(tx->sender(), std::back_insert_iterator(sender));
+
+            message->setOrigin(sender);
+            message->setFrom(std::move(sender));
+
+            if (tx->to().empty())
+            {
+                message->setTo(
+                    newEVMAddress(message->from(), m_block->blockHeaderConst()->number(), 0));
+                message->setCreate(true);
+            }
+            else
+            {
+                message->setTo(std::string(tx->to()));
+                message->setCreate(false);
+            }
+
+            message->setDepth(0);
+            message->setGasAvailable(3000000);  // TODO: add const var
+            message->setData(tx->input().toBytes());
+            message->setStaticCall(false);
+
+            m_executiveStates.emplace_back(i, std::move(message));
+        }
     }
 
     class BatchCallback : public std::enable_shared_from_this<BatchCallback>
@@ -53,6 +94,8 @@ void BlockExecutive::asyncExecute(
 
             if (!m_self->m_executiveStates.empty())
             {
+                m_self->m_calledContract.clear();
+
                 m_self->startBatch(std::bind(
                     &BatchCallback::operator(), shared_from_this(), std::placeholders::_1));
             }
@@ -103,7 +146,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             auto seq = it->currentSeq++;
 
             it->callStack.push(seq);
-            it->callHistory.push_front(seq);
 
             it->message->setSeq(seq);
 
@@ -126,6 +168,11 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                             std::move(it->message->takeLogEntries())),
                         it->message->status(), std::move(it->message->takeData()),
                         m_block->blockHeaderConst()->number());
+
+                // Calc the gas
+                ++m_gasUsed;  // TODO: calc the total gas used
+
+                // Remove executive state and continue
                 it = m_executiveStates.erase(it);
                 continue;
             }
@@ -228,8 +275,52 @@ bcos::protocol::BlockHeader::Ptr BlockExecutive::generateResultBlockHeader()
 {
     auto blockHeader =
         m_blockHeaderFactory->createBlockHeader(m_block->blockHeaderConst()->number());
+    auto currentBlockHeader = m_block->blockHeaderConst();
 
-    // blockHeader->setStateRoot(const bcos::crypto::HashType &_stateRoot);
+    blockHeader->setVersion(currentBlockHeader->version());
+    blockHeader->setTxsRoot(currentBlockHeader->txsRoot());
+    blockHeader->setReceiptsRoot(currentBlockHeader->receiptsRoot());
+    blockHeader->setStateRoot(h256(1));  // TODO: calc the state root
+    blockHeader->setNumber(currentBlockHeader->number());
+    blockHeader->setGasUsed(m_gasUsed);
+    blockHeader->setTimestamp(currentBlockHeader->timestamp());
+    blockHeader->setSealer(currentBlockHeader->sealer());
+    blockHeader->setSealerList(currentBlockHeader->sealerList());
+    blockHeader->setSignatureList(currentBlockHeader->signatureList());
+    blockHeader->setConsensusWeights(currentBlockHeader->consensusWeights());
+    blockHeader->setParentInfo(currentBlockHeader->parentInfo());
+    blockHeader->setExtraData(currentBlockHeader->extraData().toBytes());
 
     return blockHeader;
+}
+
+std::string BlockExecutive::newEVMAddress(
+    const std::string_view& sender, int64_t blockNumber, int64_t contextID)
+{
+    auto hash =
+        m_hashImpl->hash(std::string(sender) + boost::lexical_cast<std::string>(blockNumber) +
+                         boost::lexical_cast<std::string>(contextID));
+
+    std::string hexAddress;
+    hexAddress.reserve(40);
+    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
+
+    toChecksumAddress(hexAddress, m_hashImpl);
+
+    return hexAddress;
+}
+
+std::string BlockExecutive::newEVMAddress(
+    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
+{
+    auto hash =
+        m_hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + m_hashImpl->hash(_init));
+
+    std::string hexAddress;
+    hexAddress.reserve(40);
+    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
+
+    toChecksumAddress(hexAddress, m_hashImpl);
+
+    return hexAddress;
 }
