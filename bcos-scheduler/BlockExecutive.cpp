@@ -139,7 +139,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
 
             auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_calledExecutor.size();  // self + all executors
-            status->checkAndCommit = [this, callback](const CommitStatus& status) {
+            status->checkAndCommit = [this, callback = std::move(callback)](
+                                         const CommitStatus& status) {
                 if (status.success + status.failed < status.total)
                 {
                     return;
@@ -162,6 +163,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                             return;
                         }
                     });
+
+                    return;
                 }
 
                 asyncBlockCommit([this, callback](Error::UniquePtr&& error) {
