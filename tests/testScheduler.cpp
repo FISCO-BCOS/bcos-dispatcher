@@ -92,10 +92,20 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         block->appendTransactionMetaData(std::move(metaTx));
     }
 
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+
     scheduler->executeBlock(
-        block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
+
+            executedHeader = std::move(header);
+        });
+
+    scheduler->commitBlock(
+        executedHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(config);
         });
 }
 

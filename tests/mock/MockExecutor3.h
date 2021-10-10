@@ -26,14 +26,21 @@ public:
         input->setData(bcos::bytes(data.begin(), data.end()));
         input->setType(bcos::protocol::ExecutionMessage::FINISHED);
 
+        auto [it, inserted] = txHashes.emplace(input->transactionHash());
+        (void)it;
+        if (!inserted)
+        {
+            BOOST_FAIL("Duplicate hash: " + input->transactionHash().hex());
+        }
+
         auto inputShared =
             std::make_shared<bcos::protocol::ExecutionMessage::UniquePtr>(std::move(input));
 
-        auto [it, inserted] = batchContracts.emplace(std::string((*inputShared)->to()),
+        auto [it2, inserted2] = batchContracts.emplace(std::string((*inputShared)->to()),
             [callback, inputShared]() { callback(nullptr, std::move(*inputShared)); });
 
-        (void)it;
-        if (!inserted)
+        (void)it2;
+        if (!inserted2)
         {
             BOOST_FAIL("Duplicate contract: " + std::string((*inputShared)->to()));
         }
@@ -52,6 +59,7 @@ public:
     }
 
     std::map<std::string, std::function<void()>> batchContracts;
+    std::set<bcos::h256> txHashes;
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test
