@@ -16,9 +16,12 @@ public:
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback) noexcept override
     {
+        BOOST_CHECK_EQUAL(input->type(), protocol::ExecutionMessage::TXHASH);
+
         // Always success
         SCHEDULER_LOG(TRACE) << "Input:" << input.get() << " to:" << input->to();
         BOOST_CHECK(input);
+        input->setType(protocol::ExecutionMessage::FINISHED);
         input->setStatus(0);
         input->setMessage("");
 
