@@ -192,7 +192,6 @@ void SchedulerImpl::execute()
 
         it->callback(std::move(error), bcos::protocol::BlockHeader::Ptr(m_executing->result));
 
-
         execute();
     });
 }
