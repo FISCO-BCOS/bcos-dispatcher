@@ -129,7 +129,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto commitLockPtr = std::make_shared<decltype(commitLock)>(
         std::move(commitLock));  // std::function need copyable
 
-    frontBlock.asyncCommit([callback = std::move(callback)](Error::UniquePtr&& error) {
+    blocksLock.release();
+    frontBlock.asyncCommit([this, callback = std::move(callback),
+                               commitLock = std::move(commitLockPtr)](Error::UniquePtr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
@@ -137,6 +139,11 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                          SchedulerError::UnknownError, "Unknown error", *error),
                 nullptr);
         }
+
+        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+        m_blocks.pop_front();
+
+        callback(nullptr, nullptr);  // TODO: add ledgerConfig return
     });
 }
 
