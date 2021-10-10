@@ -137,17 +137,9 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                 return;
             }
 
-            struct PrepareResult
-            {
-                std::atomic_size_t total;
-                std::atomic_size_t success = 0;
-                std::atomic_size_t failed = 0;
-                std::function<void(const PrepareResult&)> checkAndCommit;
-            };
-
-            auto status = std::make_shared<PrepareResult>();
+            auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_calledExecutor.size();  // self + all executors
-            status->checkAndCommit = [this, callback](const PrepareResult& status) {
+            status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (status.success + status.failed < status.total)
                 {
                     return;
@@ -158,22 +150,26 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                     SCHEDULER_LOG(WARNING) << "Prepare with errors! " +
                                                   boost::lexical_cast<std::string>(status.failed);
 
-                    asyncBlockRollback([](Error::UniquePtr&& error) {
+                    asyncBlockRollback([this, callback](Error::UniquePtr&& error) {
                         if (error)
                         {
-                            SCHEDULER_LOG(ERROR) << "Rollback storage failed!"
-                                                 << boost::diagnostic_information(*error);
+                            SCHEDULER_LOG(ERROR)
+                                << "Rollback storage failed!" << LOG_KV("number", number()) << " "
+                                << boost::diagnostic_information(*error);
                             // FATAL ERROR, NEED MANUAL FIX!
+
+                            callback(std::move(error));
                             return;
                         }
                     });
                 }
 
-                asyncBlockCommit([callback](Error::UniquePtr&& error) {
+                asyncBlockCommit([this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR) << "Commit block to storage failed!"
-                                             << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(ERROR)
+                            << "Commit block to storage failed!" << LOG_KV("number", number())
+                            << boost::diagnostic_information(*error);
 
                         // FATAL ERROR, NEED MANUAL FIX!
 
@@ -189,7 +185,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
             storage::TransactionalStorageInterface::TwoPCParams params;
             m_scheduler->m_storage->asyncPrepare(
                 params, stateStorage, [status](Error::Ptr&& error, uint64_t num) {
-                    (void)num;  // TODO: use
+                    (void)num;  // TODO: how to use?
 
                     if (error)
                     {
@@ -200,7 +196,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                         ++status->success;
                     }
 
-                    status->checkAndCommit();
+                    status->checkAndCommit(*status);
                 });
 
             for (auto& it : m_calledExecutor)
@@ -216,7 +212,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                         ++status->success;
                     }
 
-                    status->checkAndCommit();
+                    status->checkAndCommit(*status);
                 });
             }
         });
@@ -224,30 +220,120 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
 
 void BlockExecutive::asyncBlockCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept
 {
+    auto status = std::make_shared<CommitStatus>();
+    status->total = 1 + m_calledExecutor.size();  // self + all executors
+    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+        if (status.success + status.failed < status.total)
+        {
+            return;
+        }
+
+        if (status.failed > 0)
+        {
+            auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
+                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+            SCHEDULER_LOG(WARNING) << message;
+
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, std::move(message)));
+            return;
+        }
+
+        callback(nullptr);
+    };
+
     storage::TransactionalStorageInterface::TwoPCParams params;
-    m_scheduler->m_storage->asyncCommit(params, [this, callback](Error::Ptr&& error) {
+    m_scheduler->m_storage->asyncCommit(params, [status](Error::Ptr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Commit storage error!"
                                  << boost::diagnostic_information(*error);
 
-            this->asyncBlockRollback();
-            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                SchedulerError::UnknownError, "Commit storage error!", *error));
-            return;
+            ++status->failed;
         }
+        else
+        {
+            ++status->success;
+        }
+
+        status->checkAndCommit(*status);
     });
 
     for (auto& it : m_calledExecutor)
     {
         executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
-        it->commit(executorParams, [this, callback](bcos::Error::Ptr&& error) {
-            SCHEDULER_LOG(ERROR) << "Commit executor error!"
+        it->commit(executorParams, [status](bcos::Error::Ptr&& error) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Commit executor error!" << boost::diagnostic_information(*error);
+                ++status->failed;
+            }
+            else
+            {
+                ++status->success;
+            }
+
+            status->checkAndCommit(*status);
+        });
+    }
+}
+
+void BlockExecutive::asyncBlockRollback(std::function<void(Error::UniquePtr&&)> callback) noexcept
+{
+    auto status = std::make_shared<CommitStatus>();
+    status->total = 1 + m_calledExecutor.size();  // self + all executors
+    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+        if (status.success + status.failed < status.total)
+        {
+            return;
+        }
+
+        if (status.failed > 0)
+        {
+            auto message = "Rollback block:" + boost::lexical_cast<std::string>(number()) +
+                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+            SCHEDULER_LOG(WARNING) << message;
+
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::RollbackError, std::move(message)));
+            return;
+        }
+
+        callback(nullptr);
+    };
+
+    storage::TransactionalStorageInterface::TwoPCParams params;
+    m_scheduler->m_storage->asyncRollback(params, [status](Error::Ptr&& error) {
+        if (error)
+        {
+            SCHEDULER_LOG(ERROR) << "Commit storage error!"
                                  << boost::diagnostic_information(*error);
 
-            this->asyncBlockRollback();
-            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                SchedulerError::UnknownError, "Commit executor error!", *error));
+            ++status->failed;
+        }
+        else
+        {
+            ++status->success;
+        }
+
+        status->checkAndCommit(*status);
+    });
+
+    for (auto& it : m_calledExecutor)
+    {
+        executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+        it->rollback(executorParams, [status](bcos::Error::Ptr&& error) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Rollback executor error!" << boost::diagnostic_information(*error);
+                ++status->failed;
+            }
+            else
+            {
+                ++status->success;
+            }
+
+            status->checkAndCommit(*status);
         });
     }
 }

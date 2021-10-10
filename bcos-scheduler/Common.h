@@ -11,6 +11,8 @@ enum SchedulerError
     InvalidBlockNumber,
     InvalidBlocks,
     PrewriteBlockError,
+    CommitError,
+    RollbackError,
 };
 
 }  // namespace bcos::scheduler

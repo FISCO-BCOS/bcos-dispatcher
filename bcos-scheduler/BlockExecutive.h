@@ -49,6 +49,13 @@ public:
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
 private:
+    struct CommitStatus
+    {
+        std::atomic_size_t total;
+        std::atomic_size_t success = 0;
+        std::atomic_size_t failed = 0;
+        std::function<void(const CommitStatus&)> checkAndCommit;
+    };
     void asyncBlockCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept;
     void asyncBlockRollback(std::function<void(Error::UniquePtr&&)> callback) noexcept;
 

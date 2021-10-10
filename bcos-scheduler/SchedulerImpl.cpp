@@ -100,7 +100,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
 
-    if (!m_blocks.empty())
+    if (m_blocks.empty())
     {
         auto message = "No uncommitted block";
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;

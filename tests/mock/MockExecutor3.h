@@ -1,6 +1,7 @@
 #pragma once
 #include "../bcos-scheduler/Common.h"
 #include "MockExecutor.h"
+#include <boost/lexical_cast.hpp>
 #include <tuple>
 
 namespace bcos::test
@@ -17,7 +18,7 @@ public:
             callback) noexcept override
     {
         BOOST_CHECK_EQUAL(input->type(), protocol::ExecutionMessage::TXHASH);
-        BOOST_CHECK_GT(input->contextID(), 0);
+        BOOST_CHECK_GE(input->contextID(), 0);
 
         // Always success
         SCHEDULER_LOG(TRACE) << "Input:" << input.get() << " to:" << input->to();
@@ -35,6 +36,14 @@ public:
         if (!inserted)
         {
             BOOST_FAIL("Duplicate hash: " + input->transactionHash().hex());
+        }
+
+        auto [it3, inserted3] = contextIDs.emplace(input->contextID());
+        (void)it3;
+        if (!inserted3)
+        {
+            BOOST_FAIL(
+                "Duplicate contextID: " + boost::lexical_cast<std::string>(input->contextID()));
         }
 
         auto inputShared =
@@ -64,6 +73,7 @@ public:
 
     std::map<std::string, std::function<void()>> batchContracts;
     std::set<bcos::h256> txHashes;
+    std::set<int64_t> contextIDs;
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test
