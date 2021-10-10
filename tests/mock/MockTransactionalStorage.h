@@ -9,6 +9,9 @@ namespace bcos::test
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 class MockTransactionalStorage : public bcos::storage::TransactionalStorageInterface
 {
+public:
+    ~MockTransactionalStorage() override = default;
+
     void asyncGetPrimaryKeys(const std::string_view& table,
         const std::optional<storage::Condition const>& _condition,
         std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept

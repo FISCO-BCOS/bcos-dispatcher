@@ -29,6 +29,11 @@ void ExecutorManager::addExecutor(
 bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispatchExecutor(
     const std::string_view& contract)
 {
+    if (m_name2Executors.empty())
+    {
+        return nullptr;
+    }
+
     while (true)
     {
         auto executorIt = m_contract2ExecutorInfo.find(contract);

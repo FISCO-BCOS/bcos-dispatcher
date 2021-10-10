@@ -1,5 +1,7 @@
 #pragma once
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "interfaces/protocol/ProtocolTypeDef.h"
+#include <boost/test/unit_test.hpp>
 
 namespace bcos::test
 {
@@ -14,12 +16,26 @@ public:
 
     void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr&&)> callback) noexcept override
-    {}
+    {
+        m_blockNumber = blockHeader->number();
+        callback(nullptr);  // always success
+    }
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback) noexcept override
-    {}
+    {
+        // Always success
+        BOOST_CHECK(input);
+        input->setStatus(0);
+        input->setMessage("");
+
+        std::string data = "Hello world!";
+        input->setData(bcos::bytes(data.begin(), data.end()));
+        input->setType(bcos::protocol::ExecutionMessage::FINISHED);
+
+        callback(nullptr, std::move(input));
+    }
 
     void dagExecuteTransactions(
         const gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>& inputs,
@@ -54,6 +70,7 @@ public:
     void reset(std::function<void(bcos::Error::Ptr&&)> callback) noexcept override {}
 
     std::string m_name;
+    bcos::protocol::BlockNumber m_blockNumber = 0;
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test

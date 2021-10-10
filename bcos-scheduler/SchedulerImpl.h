@@ -26,7 +26,9 @@ public:
         m_transactionReceiptFactory(std::move(transactionReceiptFactory)),
         m_blockHeaderFactory(std::move(blockHeaderFactory)),
         m_hashImpl(std::move(hashImpl))
-    {}
+    {
+        m_executing = m_blocks.end();
+    }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;

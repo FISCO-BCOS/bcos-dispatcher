@@ -62,6 +62,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             std::make_unique<BlockExecutive>(block, m_executorManager, m_executionMessageFactory,
                 m_transactionReceiptFactory, m_blockHeaderFactory, m_hashImpl),
             std::move(callback)});
+
+        if (m_executing == m_blocks.end())
+        {
+            m_executing = m_blocks.begin();
+        }
     }
 
     execute();
