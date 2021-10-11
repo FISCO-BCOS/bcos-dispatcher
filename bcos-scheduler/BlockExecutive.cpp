@@ -1,10 +1,14 @@
 #include "BlockExecutive.h"
 #include "ChecksumAddress.h"
+#include "SchedulerImpl.h"
+#include "bcos-framework/libstorage/StateStorage.h"
 #include "bcos-scheduler/Common.h"
 #include "interfaces/executor/ExecutionMessage.h"
+#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "libutilities/Error.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/lexical_cast.hpp>
 #include <atomic>
 #include <iterator>
 
@@ -26,7 +30,7 @@ void BlockExecutive::asyncExecute(
         {
             auto metaData = m_block->transactionMetaData(i);
 
-            auto message = m_executionMessageFactory->createExecutionMessage();
+            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setContextID(i);
             message->setType(protocol::ExecutionMessage::TXHASH);
             message->setTransactionHash(metaData->hash());
@@ -43,7 +47,7 @@ void BlockExecutive::asyncExecute(
         {
             auto tx = m_block->transaction(i);
 
-            auto message = m_executionMessageFactory->createExecutionMessage();
+            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
             message->setContextID(i);
 
@@ -118,6 +122,136 @@ void BlockExecutive::asyncExecute(
     startBatch(std::bind(&BatchCallback::operator(), batchCallback, std::placeholders::_1));
 }
 
+void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept
+{
+    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
+
+    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_block,
+        [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Prewrite block error!" << boost::diagnostic_information(*error);
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                    SchedulerError::PrewriteBlockError, "Prewrite block error!", *error));
+                return;
+            }
+
+            struct PrepareResult
+            {
+                std::atomic_size_t total;
+                std::atomic_size_t success = 0;
+                std::atomic_size_t failed = 0;
+                std::function<void(const PrepareResult&)> checkAndCommit;
+            };
+
+            auto status = std::make_shared<PrepareResult>();
+            status->total = 1 + m_calledExecutor.size();  // self + all executors
+            status->checkAndCommit = [this, callback](const PrepareResult& status) {
+                if (status.success + status.failed < status.total)
+                {
+                    return;
+                }
+
+                if (status.failed > 0)
+                {
+                    SCHEDULER_LOG(WARNING) << "Prepare with errors! " +
+                                                  boost::lexical_cast<std::string>(status.failed);
+
+                    asyncBlockRollback([](Error::UniquePtr&& error) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR) << "Rollback storage failed!"
+                                                 << boost::diagnostic_information(*error);
+                            // FATAL ERROR, NEED MANUAL FIX!
+                            return;
+                        }
+                    });
+                }
+
+                asyncBlockCommit([callback](Error::UniquePtr&& error) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << "Commit block to storage failed!"
+                                             << boost::diagnostic_information(*error);
+
+                        // FATAL ERROR, NEED MANUAL FIX!
+
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::UnknownError,
+                            "Commit block to storage failed!", *error));
+                        return;
+                    }
+
+                    callback(nullptr);
+                });
+            };
+
+            storage::TransactionalStorageInterface::TwoPCParams params;
+            m_scheduler->m_storage->asyncPrepare(
+                params, stateStorage, [status](Error::Ptr&& error, uint64_t num) {
+                    (void)num;  // TODO: use
+
+                    if (error)
+                    {
+                        ++status->failed;
+                    }
+                    else
+                    {
+                        ++status->success;
+                    }
+
+                    status->checkAndCommit();
+                });
+
+            for (auto& it : m_calledExecutor)
+            {
+                executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+                it->prepare(executorParams, [status](Error::Ptr&& error) {
+                    if (error)
+                    {
+                        ++status->failed;
+                    }
+                    else
+                    {
+                        ++status->success;
+                    }
+
+                    status->checkAndCommit();
+                });
+            }
+        });
+}
+
+void BlockExecutive::asyncBlockCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept
+{
+    storage::TransactionalStorageInterface::TwoPCParams params;
+    m_scheduler->m_storage->asyncCommit(params, [this, callback](Error::Ptr&& error) {
+        if (error)
+        {
+            SCHEDULER_LOG(ERROR) << "Commit storage error!"
+                                 << boost::diagnostic_information(*error);
+
+            this->asyncBlockRollback();
+            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                SchedulerError::UnknownError, "Commit storage error!", *error));
+            return;
+        }
+    });
+
+    for (auto& it : m_calledExecutor)
+    {
+        executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+        it->commit(executorParams, [this, callback](bcos::Error::Ptr&& error) {
+            SCHEDULER_LOG(ERROR) << "Commit executor error!"
+                                 << boost::diagnostic_information(*error);
+
+            this->asyncBlockRollback();
+            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                SchedulerError::UnknownError, "Commit executor error!", *error));
+        });
+    }
+}
+
 void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback)
 {
     auto batchStatus = std::make_shared<BatchStatus>();
@@ -162,8 +296,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             {
                 // Execution is finished, generate receipt
                 m_executiveResults[it->contextID].receipt =
-                    m_transactionReceiptFactory->createReceipt(it->message->gasAvailable(),
-                        it->message->to(),
+                    m_scheduler->m_transactionReceiptFactory->createReceipt(
+                        it->message->gasAvailable(), it->message->to(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             std::move(it->message->takeLogEntries())),
                         it->message->status(), std::move(it->message->takeData()),
@@ -205,7 +339,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         }
 
         ++batchStatus->total;
-        auto executor = m_executorManager->dispatchExecutor(it->message->to());
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->message->to());
         executor->executeTransaction(
             std::move(it->message), [this, it, batchStatus](bcos::Error::UniquePtr&& error,
                                         bcos::protocol::ExecutionMessage::UniquePtr&& response) {
@@ -274,7 +408,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
 bcos::protocol::BlockHeader::Ptr BlockExecutive::generateResultBlockHeader()
 {
     auto blockHeader =
-        m_blockHeaderFactory->createBlockHeader(m_block->blockHeaderConst()->number());
+        m_scheduler->m_blockHeaderFactory->createBlockHeader(m_block->blockHeaderConst()->number());
     auto currentBlockHeader = m_block->blockHeaderConst();
 
     blockHeader->setVersion(currentBlockHeader->version());
@@ -297,15 +431,15 @@ bcos::protocol::BlockHeader::Ptr BlockExecutive::generateResultBlockHeader()
 std::string BlockExecutive::newEVMAddress(
     const std::string_view& sender, int64_t blockNumber, int64_t contextID)
 {
-    auto hash =
-        m_hashImpl->hash(std::string(sender) + boost::lexical_cast<std::string>(blockNumber) +
-                         boost::lexical_cast<std::string>(contextID));
+    auto hash = m_scheduler->m_hashImpl->hash(std::string(sender) +
+                                              boost::lexical_cast<std::string>(blockNumber) +
+                                              boost::lexical_cast<std::string>(contextID));
 
     std::string hexAddress;
     hexAddress.reserve(40);
     boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
 
-    toChecksumAddress(hexAddress, m_hashImpl);
+    toChecksumAddress(hexAddress, m_scheduler->m_hashImpl);
 
     return hexAddress;
 }
@@ -313,14 +447,14 @@ std::string BlockExecutive::newEVMAddress(
 std::string BlockExecutive::newEVMAddress(
     const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
 {
-    auto hash =
-        m_hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + m_hashImpl->hash(_init));
+    auto hash = m_scheduler->m_hashImpl->hash(
+        bytes{0xff} + _sender + toBigEndian(_salt) + m_scheduler->m_hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);
     boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
 
-    toChecksumAddress(hexAddress, m_hashImpl);
+    toChecksumAddress(hexAddress, m_scheduler->m_hashImpl);
 
     return hexAddress;
 }

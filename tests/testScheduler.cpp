@@ -70,6 +70,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
     // Generate a test block
     auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(100);
 
     for (size_t i = 0; i < 10; ++i)
     {

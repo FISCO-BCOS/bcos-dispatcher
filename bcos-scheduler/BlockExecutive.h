@@ -8,6 +8,7 @@
 #include "bcos-framework/libutilities/Error.h"
 #include "bcos-scheduler/ExecutorManager.h"
 #include "interfaces/crypto/CommonType.h"
+#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/BlockHeaderFactory.h"
 #include "interfaces/protocol/TransactionMetaData.h"
 #include "interfaces/protocol/TransactionReceiptFactory.h"
@@ -21,22 +22,15 @@
 
 namespace bcos::scheduler
 {
+class SchedulerImpl;
+
 class BlockExecutive
 {
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
 
-    BlockExecutive(bcos::protocol::Block::Ptr block, ExecutorManager::Ptr executorManager,
-        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory,
-        bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
-        bcos::crypto::Hash::Ptr hashImpl)
-      : m_block(std::move(block)),
-        m_executorManager(std::move(executorManager)),
-        m_executionMessageFactory(std::move(executionMessageFactory)),
-        m_transactionReceiptFactory(std::move(transactionReceiptFactory)),
-        m_blockHeaderFactory(std::move(blockHeaderFactory)),
-        m_hashImpl(std::move(hashImpl))
+    BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler)
+      : m_block(std::move(block)), m_scheduler(scheduler)
     {}
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -47,12 +41,17 @@ public:
     void asyncExecute(
         std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback) noexcept;
 
+    void asyncCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept;
+
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
     bcos::protocol::Block::Ptr block() { return m_block; }
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
 private:
+    void asyncBlockCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept;
+    void asyncBlockRollback(std::function<void(Error::UniquePtr&&)> callback) noexcept;
+
     struct BatchStatus  // Batch state per batch
     {
         std::atomic_size_t total = 0;
@@ -90,10 +89,10 @@ private:
     {
         bcos::protocol::TransactionReceipt::Ptr receipt;
     };
-
     std::vector<ExecutiveResult> m_executiveResults;
 
     std::set<std::string, std::less<>> m_calledContract;
+    std::set<executor::ParallelTransactionExecutorInterface::Ptr> m_calledExecutor;
 
     struct KeyLock
     {
@@ -106,12 +105,7 @@ private:
     int64_t m_seqCount = 0;
 
     bcos::protocol::Block::Ptr m_block;
-    ExecutorManager::Ptr m_executorManager;
-    bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
-    bcos::protocol::TransactionReceiptFactory::Ptr m_transactionReceiptFactory;
-    bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;
-    bcos::crypto::Hash::Ptr m_hashImpl;
-
     bcos::protocol::BlockHeader::Ptr m_result;
+    SchedulerImpl* m_scheduler;
 };
 }  // namespace bcos::scheduler

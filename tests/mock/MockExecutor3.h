@@ -17,17 +17,18 @@ public:
             callback) noexcept override
     {
         BOOST_CHECK_EQUAL(input->type(), protocol::ExecutionMessage::TXHASH);
+        BOOST_CHECK_GT(input->contextID(), 0);
 
         // Always success
         SCHEDULER_LOG(TRACE) << "Input:" << input.get() << " to:" << input->to();
         BOOST_CHECK(input);
-        input->setType(protocol::ExecutionMessage::FINISHED);
+
+        input->setType(bcos::protocol::ExecutionMessage::FINISHED);
         input->setStatus(0);
         input->setMessage("");
 
         std::string data = "Hello world!";
         input->setData(bcos::bytes(data.begin(), data.end()));
-        input->setType(bcos::protocol::ExecutionMessage::FINISHED);
 
         auto [it, inserted] = txHashes.emplace(input->transactionHash());
         (void)it;

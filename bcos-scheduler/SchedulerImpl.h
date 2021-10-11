@@ -13,6 +13,8 @@ namespace bcos::scheduler
 class SchedulerImpl : public SchedulerInterface
 {
 public:
+    friend class BlockExecutive;
+
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
@@ -26,9 +28,7 @@ public:
         m_transactionReceiptFactory(std::move(transactionReceiptFactory)),
         m_blockHeaderFactory(std::move(blockHeaderFactory)),
         m_hashImpl(std::move(hashImpl))
-    {
-        m_executing = m_blocks.end();
-    }
+    {}
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -64,20 +64,10 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    void execute();
-
-    struct BlockExecuteItem
-    {
-        BlockExecutive::UniquePtr executive;
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback;
-    };
-
-    std::list<BlockExecuteItem> m_blocks;
+    std::list<BlockExecutive> m_blocks;
     std::mutex m_blocksMutex;
 
-    decltype(m_blocks)::iterator m_executing;
     std::mutex m_executeMutex;
-
     std::mutex m_commitMutex;
 
     ExecutorManager::Ptr m_executorManager;

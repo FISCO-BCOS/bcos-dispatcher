@@ -10,6 +10,7 @@ enum SchedulerError
     InvalidStatus,
     InvalidBlockNumber,
     InvalidBlocks,
+    PrewriteBlockError,
 };
 
 }  // namespace bcos::scheduler
