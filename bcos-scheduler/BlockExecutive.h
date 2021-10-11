@@ -109,7 +109,6 @@ private:
     tbb::concurrent_unordered_map<std::string, KeyLock> m_keyLocks;
 
     size_t m_gasUsed = 0;
-    int64_t m_seqCount = 0;
 
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::Ptr m_result;
