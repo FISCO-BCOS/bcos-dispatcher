@@ -71,6 +71,14 @@ public:
         }
     }
 
+    void getHash(bcos::protocol::BlockNumber number,
+        std::function<void(bcos::Error::UniquePtr&&, crypto::HashType&&)> callback) noexcept
+        override
+    {
+        BOOST_CHECK_GT(number, 0);
+        callback(nullptr, h256(255));
+    }
+
     std::map<std::string, std::function<void()>> batchContracts;
     std::set<bcos::h256> txHashes;
     std::set<int64_t> contextIDs;

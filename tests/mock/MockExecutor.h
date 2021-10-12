@@ -49,10 +49,9 @@ public:
             callback) noexcept override
     {}
 
-    void getTableHashes(bcos::protocol::BlockNumber number,
-        std::function<void(
-            bcos::Error::UniquePtr&&, std::vector<std::tuple<std::string, crypto::HashType>>&&)>
-            callback) noexcept override
+    void getHash(bcos::protocol::BlockNumber number,
+        std::function<void(bcos::Error::UniquePtr&&, crypto::HashType&&)> callback) noexcept
+        override
     {}
 
     void prepare(const TwoPCParams& params,
