@@ -13,6 +13,8 @@ class MockParallelExecutor3 : public MockParallelExecutor
 public:
     MockParallelExecutor3(const std::string& name) : MockParallelExecutor(name) {}
 
+    ~MockParallelExecutor3() override {}
+
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback) noexcept override
