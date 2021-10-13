@@ -73,6 +73,8 @@ public:
         }
     }
 
+    
+
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr&&, crypto::HashType&&)> callback) noexcept
         override

@@ -58,15 +58,21 @@ public:
 
     void prepare(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
-    {}
+    {
+        callback(nullptr);
+    }
 
     void commit(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
-    {}
+    {
+        callback(nullptr);
+    }
 
     void rollback(const TwoPCParams& params,
         std::function<void(bcos::Error::Ptr&&)> callback) noexcept override
-    {}
+    {
+        callback(nullptr);
+    }
 
     void reset(std::function<void(bcos::Error::Ptr&&)> callback) noexcept override {}
 

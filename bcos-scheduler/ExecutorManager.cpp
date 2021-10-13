@@ -1,10 +1,13 @@
 #include "ExecutorManager.h"
 #include <bcos-framework/libutilities/Error.h>
 #include <tbb/parallel_sort.h>
+#include <boost/concept_check.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <mutex>
 #include <thread>
+#include <tuple>
 
 using namespace bcos::scheduler;
 
@@ -17,6 +20,14 @@ void ExecutorManager::addExecutor(
 
     std::unique_lock lock(m_mutex);
     auto [it, exists] = m_name2Executors.emplace(executorInfo->name, executorInfo);
+
+    std::tie(std::ignore, exists) = m_name2Executors.emplace(executorInfo->name, executorInfo);
+
+    std::ignore = it;
+
+    boost::ignore_unused(it);
+
+    (void)it;
 
     if (!exists)
     {

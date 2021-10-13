@@ -18,6 +18,7 @@
 #include <bcos-tars-protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/TransactionReceiptFactoryImpl.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test
@@ -33,6 +34,10 @@ struct SchedulerFixture
         ledger = std::make_shared<MockLedger>();
         executorManager = std::make_shared<scheduler::ExecutorManager>();
         storage = std::make_shared<MockTransactionalStorage>();
+
+        auto stateStorage = std::make_shared<storage::StateStorage>(nullptr);
+        storage->m_storage = stateStorage;
+
         transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite);
         transactionReceiptFactory =
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
@@ -48,7 +53,7 @@ struct SchedulerFixture
 
     ledger::LedgerInterface::Ptr ledger;
     scheduler::ExecutorManager::Ptr executorManager;
-    storage::TransactionalStorageInterface::Ptr storage;
+    std::shared_ptr<MockTransactionalStorage> storage;
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
     protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory;
     protocol::BlockHeaderFactory::Ptr blockHeaderFactory;
@@ -106,12 +111,21 @@ BOOST_AUTO_TEST_CASE(executeBlock)
     BOOST_CHECK(executedHeader);
     BOOST_CHECK_NE(executedHeader->stateRoot(), h256());
 
+    bool commited = false;
     scheduler->commitBlock(
         executedHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+            commited = true;
+
             BOOST_CHECK(!error);
+            if (error)
+            {
+                std::cout << boost::diagnostic_information(*error) << std::endl;
+            }
             // BOOST_CHECK(config);
             (void)config;
         });
+
+    BOOST_CHECK(commited);
 }
 
 BOOST_AUTO_TEST_CASE(registerExecutor)

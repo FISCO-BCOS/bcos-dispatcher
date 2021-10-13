@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include <boost/test/unit_test.hpp>
 
 namespace bcos::test
 {
@@ -11,7 +12,10 @@ class MockLedger : public bcos::ledger::LedgerInterface
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback)
-    {}
+    {
+        BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 100);
+        callback(nullptr);
+    }
 
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)

@@ -1,5 +1,6 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
+#include "interfaces/ledger/LedgerConfig.h"
 #include "libutilities/Error.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -129,7 +130,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto commitLockPtr = std::make_shared<decltype(commitLock)>(
         std::move(commitLock));  // std::function need copyable
 
-    blocksLock.release();
+    blocksLock.unlock();
     frontBlock.asyncCommit([this, callback = std::move(callback),
                                commitLock = std::move(commitLockPtr)](Error::UniquePtr&& error) {
         if (error)
@@ -143,7 +144,51 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         m_blocks.pop_front();
 
-        callback(nullptr, nullptr);  // TODO: add ledgerConfig return
+        std::string_view configs[] = {ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
+            ledger::SYSTEM_KEY_CONSENSUS_TIMEOUT, ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD};
+        m_storage->asyncGetRows(ledger::SYS_CONFIG, configs,
+            [callback = std::move(callback)](
+                Error::UniquePtr&& error, std::vector<std::optional<storage::Entry>>&& entries) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << "Get system config error, " << boost::diagnostic_information(*error);
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                 SchedulerError::UnknownError, "Get system config error", *error),
+                        nullptr);
+                    return;
+                }
+
+                if (entries.size() < 3)
+                {
+                    SCHEDULER_LOG(ERROR) << "Too few entries: " << entries.size();
+                    callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "Too few entries"),
+                        nullptr);
+                    return;
+                }
+
+                try
+                {
+                    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
+                    ledgerConfig->setBlockTxCountLimit(
+                        boost::lexical_cast<uint64_t>(entries[0].value().getField(0)));
+                    ledgerConfig->setConsensusTimeout(
+                        boost::lexical_cast<uint64_t>(entries[1].value().getField(0)));
+                    ledgerConfig->setLeaderSwitchPeriod(
+                        boost::lexical_cast<uint64_t>(entries[2].value().getField(0)));
+
+                    callback(nullptr, std::move(ledgerConfig));
+                }
+                catch (std::exception& e)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << "Parse ledger config error, " << boost::diagnostic_information(e);
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                 SchedulerError::UnknownError, "Parse ledger config error", e),
+                        nullptr);
+                    return;
+                }
+            });
     });
 }
 

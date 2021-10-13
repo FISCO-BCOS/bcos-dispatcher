@@ -105,14 +105,11 @@ void BlockExecutive::asyncExecute(
             }
             else
             {
-                // // Get the hash
-                // for (auto& it : m_self->m_calledExecutor)
-                // {
-                //     it->getHash(m_self->number(), [](bcos::Error::UniquePtr&&,
-                //     crypto::HashType&&) {
-
-                //     });
-                // }
+                // Move receipts to block
+                for (auto& it : m_self->m_executiveResults)
+                {
+                    m_self->m_block->appendReceipt(std::move(it.receipt));
+                }
 
                 // All Transaction finished, get hash
                 m_self->asyncGetHashes([self = m_self, callback = std::move(m_callback)](
@@ -332,6 +329,7 @@ void BlockExecutive::asyncBlockCommit(std::function<void(Error::UniquePtr&&)> ca
         status->checkAndCommit(*status);
     });
 
+    std::cout << "calledExecutor size: " << m_calledExecutor.size() << std::endl;
     for (auto& it : m_calledExecutor)
     {
         executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
