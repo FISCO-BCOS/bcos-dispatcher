@@ -117,12 +117,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             commited = true;
 
             BOOST_CHECK(!error);
-            if (error)
-            {
-                std::cout << boost::diagnostic_information(*error) << std::endl;
-            }
-            // BOOST_CHECK(config);
-            (void)config;
+            BOOST_CHECK(config);
         });
 
     BOOST_CHECK(commited);

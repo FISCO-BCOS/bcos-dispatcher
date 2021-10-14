@@ -102,12 +102,12 @@ private:
     std::set<std::string, std::less<>> m_calledContract;
     std::set<executor::ParallelTransactionExecutorInterface::Ptr> m_calledExecutor;
 
-    struct KeyLock
-    {
-        int64_t contextID;
-        std::atomic_int64_t count;
-    };
-    tbb::concurrent_unordered_map<std::string, KeyLock> m_keyLocks;
+    // struct KeyLock
+    // {
+    //     int64_t contextID;
+    //     std::atomic_int64_t count;
+    // };
+    // tbb::concurrent_unordered_map<std::string, KeyLock> m_keyLocks;
 
     size_t m_gasUsed = 0;
 

@@ -139,6 +139,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                          SchedulerError::UnknownError, "Unknown error", *error),
                 nullptr);
+            return;
         }
 
         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);

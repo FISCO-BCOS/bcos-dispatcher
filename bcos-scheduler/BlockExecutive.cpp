@@ -332,6 +332,7 @@ void BlockExecutive::asyncBlockCommit(std::function<void(Error::UniquePtr&&)> ca
     std::cout << "calledExecutor size: " << m_calledExecutor.size() << std::endl;
     for (auto& it : m_calledExecutor)
     {
+        SCHEDULER_LOG(TRACE) << "Commit for executor: " << it.get();  // TODO: problem here!
         executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
         it->commit(executorParams, [status](bcos::Error::Ptr&& error) {
             if (error)
@@ -476,14 +477,14 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         // Retry type, send again
         case protocol::ExecutionMessage::WAIT_KEY:
         {
-            auto keyIt = m_keyLocks.find(
-                std::string(it->message->keyLockAcquired()));  // TODO: replace tbb with onetbb,
-                                                               // support find with string_view
-            if (keyIt != m_keyLocks.end() && keyIt->second.count > 0 &&
-                keyIt->second.contextID != it->contextID)
-            {
-                continue;  // Request key is locking
-            }
+            // auto keyIt = m_keyLocks.find(
+            //     std::string(it->message->keyLockAcquired()));  // TODO: replace tbb with onetbb,
+            //                                                    // support find with string_view
+            // if (keyIt != m_keyLocks.end() && keyIt->second.count > 0 &&
+            //     keyIt->second.contextID != it->contextID)
+            // {
+            //     continue;  // Request key is locking
+            // }
 
             break;
         }
@@ -498,7 +499,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
 
         ++batchStatus->total;
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->message->to());
-        m_calledExecutor.emplace(executor);
+        SCHEDULER_LOG(TRACE) << "Add executor: " << executor.get();
+        m_calledExecutor.insert(executor);
         executor->executeTransaction(
             std::move(it->message), [this, it, batchStatus](bcos::Error::UniquePtr&& error,
                                         bcos::protocol::ExecutionMessage::UniquePtr&& response) {

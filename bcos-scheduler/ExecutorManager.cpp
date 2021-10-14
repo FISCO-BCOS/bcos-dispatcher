@@ -20,14 +20,7 @@ void ExecutorManager::addExecutor(
 
     std::unique_lock lock(m_mutex);
     auto [it, exists] = m_name2Executors.emplace(executorInfo->name, executorInfo);
-
-    std::tie(std::ignore, exists) = m_name2Executors.emplace(executorInfo->name, executorInfo);
-
-    std::ignore = it;
-
     boost::ignore_unused(it);
-
-    (void)it;
 
     if (!exists)
     {
