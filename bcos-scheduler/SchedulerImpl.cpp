@@ -156,7 +156,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 return;
             }
 
-            SCHEDULER_LOG(INFO) << "ExecuteBlock success"
+            SCHEDULER_LOG(INFO) << "Commit block success"
                                 << LOG_KV("block number", ledgerConfig->blockNumber());
 
             std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
