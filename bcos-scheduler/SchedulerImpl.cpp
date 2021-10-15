@@ -156,8 +156,14 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 return;
             }
 
+            SCHEDULER_LOG(INFO) << "ExecuteBlock success"
+                                << LOG_KV("block number", ledgerConfig->blockNumber());
+
             std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
             m_blocks.pop_front();
+
+            SCHEDULER_LOG(DEBUG) << "Remove committed block: " << ledgerConfig->blockNumber()
+                                 << " success";
 
             callback(nullptr, std::move(ledgerConfig));
             if (m_blockNumberReceiver)
