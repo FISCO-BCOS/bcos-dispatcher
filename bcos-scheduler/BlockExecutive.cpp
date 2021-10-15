@@ -41,7 +41,7 @@ void BlockExecutive::asyncExecute(
             }
             else
             {
-                message->setTo(preprocessAddress(message->to()));
+                message->setTo(preprocessAddress(metaData->to()));
             }
 
             message->setDepth(0);
