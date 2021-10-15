@@ -77,6 +77,8 @@ private:
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
+    std::string preprocessAddress(const std::string_view& address);
+
     struct ExecutiveState  // Executive state per tx
     {
         ExecutiveState(int64_t _contextID, bcos::protocol::ExecutionMessage::UniquePtr _message)

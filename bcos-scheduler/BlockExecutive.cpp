@@ -35,14 +35,13 @@ void BlockExecutive::asyncExecute(
             message->setType(protocol::ExecutionMessage::TXHASH);
             message->setTransactionHash(metaData->hash());
 
-
             if (metaData->to().empty())
             {
                 message->setCreate(true);
             }
             else
             {
-                message->setTo(std::string(metaData->to()));
+                message->setTo(preprocessAddress(message->to()));
             }
 
             message->setDepth(0);
@@ -76,7 +75,7 @@ void BlockExecutive::asyncExecute(
             }
             else
             {
-                message->setTo(std::string(tx->to()));
+                message->setTo(preprocessAddress(tx->to()));
             }
 
             message->setDepth(0);
@@ -495,7 +494,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         }
 
         // When to() is empty, create contract
-        if (it->message->create() || it->message->to().empty())
+        if (it->message->to().empty())
         {
             if (it->message->createSalt())
             {
@@ -555,6 +554,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             }
 
             it->message->setSeq(it->callStack.top());
+            it->message->setCreate(false);
 
             break;
         }
@@ -669,4 +669,20 @@ std::string BlockExecutive::newEVMAddress(
     toChecksumAddress(hexAddress, m_scheduler->m_hashImpl);
 
     return hexAddress;
+}
+
+std::string BlockExecutive::preprocessAddress(const std::string_view& address)
+{
+    std::string out;
+    if (address[0] == '0' && address[1] == 'x')
+    {
+        out = std::string(address.substr(2));
+    }
+    else
+    {
+        out = std::string(address);
+    }
+
+    boost::to_lower(out);
+    return out;
 }
