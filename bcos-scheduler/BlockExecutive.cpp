@@ -511,6 +511,20 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
 
             it->message->setSeq(seq);
 
+            // When to() is empty, create contract
+            if (it->message->to().empty())
+            {
+                if (it->message->createSalt())
+                {
+                    it->message->setTo(newEVMAddress(
+                        it->message->from(), it->message->data(), *(it->message->createSalt())));
+                }
+                else
+                {
+                    it->message->setTo(newEVMAddress(number(), it->contextID, it->message->seq()));
+                }
+            }
+
             break;
         }
         // Return type, pop stack

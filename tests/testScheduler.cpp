@@ -8,6 +8,7 @@
 #include "interfaces/storage/StorageInterface.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
+#include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
@@ -83,10 +84,6 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         block->appendTransactionMetaData(std::move(metaTx));
     }
 
-    // auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-    //     h256(9), "");  // No to, is create
-    // block->appendTransactionMetaData(std::move(metaTx));
-
     for (size_t i = 10; i < 20; ++i)
     {
         auto metaTx =
@@ -141,6 +138,32 @@ BOOST_AUTO_TEST_CASE(registerExecutor)
         "executor1", executor, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
     scheduler->registerExecutor(
         "executor2", executor2, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
+}
+
+BOOST_AUTO_TEST_CASE(createContract)
+{
+    // Add executor
+    executorManager->addExecutor(
+        "executor1", std::make_shared<MockParallelExecutorForCreate>("executor1"));
+
+    // Generate a test block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(100);
+
+    auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(1), "");
+    block->appendTransactionMetaData(std::move(metaTx));
+
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    scheduler->executeBlock(
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(header);
+
+            executedHeader = std::move(header);
+        });
+
+    BOOST_CHECK(executedHeader);
+    BOOST_CHECK_NE(executedHeader->stateRoot(), h256());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
