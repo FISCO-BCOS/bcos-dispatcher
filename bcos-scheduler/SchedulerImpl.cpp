@@ -165,10 +165,11 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             SCHEDULER_LOG(DEBUG) << "Remove committed block: " << ledgerConfig->blockNumber()
                                  << " success";
 
+            auto blockNumber = ledgerConfig->blockNumber();
             callback(nullptr, std::move(ledgerConfig));
             if (m_blockNumberReceiver)
             {
-                m_blockNumberReceiver(ledgerConfig->blockNumber());
+                m_blockNumberReceiver(blockNumber);
             }
         });
     });
