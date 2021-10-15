@@ -37,14 +37,9 @@ void BlockExecutive::asyncExecute(
 
             if (metaData->to().empty())
             {
-                message->setTo(newEVMAddress(m_block->blockHeaderConst()->number(), i, 0));
                 message->setCreate(true);
             }
-            else
-            {
-                message->setTo(std::string(metaData->to()));
-                message->setCreate(false);
-            }
+
             message->setDepth(0);
             message->setGasAvailable(3000000);  // TODO: add const var
             message->setStaticCall(false);
@@ -72,13 +67,7 @@ void BlockExecutive::asyncExecute(
 
             if (tx->to().empty())
             {
-                message->setTo(newEVMAddress(m_block->blockHeaderConst()->number(), i, 0));
                 message->setCreate(true);
-            }
-            else
-            {
-                message->setTo(std::string(tx->to()));
-                message->setCreate(false);
             }
 
             message->setDepth(0);
@@ -496,6 +485,20 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             break;
         }
 
+        // When to() is empty, create contract
+        if (it->message->create() || it->message->to().empty())
+        {
+            if (it->message->createSalt())
+            {
+                it->message->setTo(newEVMAddress(
+                    it->message->from(), it->message->data(), *(it->message->createSalt())));
+            }
+            else
+            {
+                it->message->setTo(newEVMAddress(number(), it->contextID, it->message->seq()));
+            }
+        }
+
         if (m_calledContract.find(it->message->to()) != m_calledContract.end())
         {
             continue;  // Another context processing
@@ -514,20 +517,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
 
             it->message->setSeq(seq);
 
-            // When to() is empty, create contract
-            if (it->message->to().empty())
-            {
-                if (it->message->createSalt())
-                {
-                    it->message->setTo(newEVMAddress(
-                        it->message->from(), it->message->data(), *(it->message->createSalt())));
-                }
-                else
-                {
-                    it->message->setTo(newEVMAddress(number(), it->contextID, it->message->seq()));
-                }
-            }
-
             break;
         }
         // Return type, pop stack
@@ -542,7 +531,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                 // Execution is finished, generate receipt
                 m_executiveResults[it->contextID].receipt =
                     m_scheduler->m_transactionReceiptFactory->createReceipt(
-                        it->message->gasAvailable(), it->message->to(),
+                        it->message->gasAvailable(), it->message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             std::move(it->message->takeLogEntries())),
                         it->message->status(), std::move(it->message->takeData()),
