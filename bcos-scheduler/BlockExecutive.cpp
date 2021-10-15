@@ -35,9 +35,14 @@ void BlockExecutive::asyncExecute(
             message->setType(protocol::ExecutionMessage::TXHASH);
             message->setTransactionHash(metaData->hash());
 
+
             if (metaData->to().empty())
             {
                 message->setCreate(true);
+            }
+            else
+            {
+                message->setTo(std::string(metaData->to()));
             }
 
             message->setDepth(0);
@@ -68,6 +73,10 @@ void BlockExecutive::asyncExecute(
             if (tx->to().empty())
             {
                 message->setCreate(true);
+            }
+            else
+            {
+                message->setTo(std::string(tx->to()));
             }
 
             message->setDepth(0);
