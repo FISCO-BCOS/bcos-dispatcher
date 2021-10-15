@@ -83,6 +83,10 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         block->appendTransactionMetaData(std::move(metaTx));
     }
 
+    // auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+    //     h256(9), "");  // No to, is create
+    // block->appendTransactionMetaData(std::move(metaTx));
+
     for (size_t i = 10; i < 20; ++i)
     {
         auto metaTx =

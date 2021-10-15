@@ -35,7 +35,19 @@ void BlockExecutive::asyncExecute(
             message->setType(protocol::ExecutionMessage::TXHASH);
             message->setTransactionHash(metaData->hash());
 
-            message->setTo(std::string(metaData->to()));
+            if (metaData->to().empty())
+            {
+                message->setTo(newEVMAddress(m_block->blockHeaderConst()->number(), i, 0));
+                message->setCreate(true);
+            }
+            else
+            {
+                message->setTo(std::string(metaData->to()));
+                message->setCreate(false);
+            }
+            message->setDepth(0);
+            message->setGasAvailable(3000000);  // TODO: add const var
+            message->setStaticCall(false);
 
             m_executiveStates.emplace_back(i, std::move(message));
         }
@@ -60,8 +72,7 @@ void BlockExecutive::asyncExecute(
 
             if (tx->to().empty())
             {
-                message->setTo(
-                    newEVMAddress(message->from(), m_block->blockHeaderConst()->number(), 0));
+                message->setTo(newEVMAddress(m_block->blockHeaderConst()->number(), i, 0));
                 message->setCreate(true);
             }
             else
@@ -615,12 +626,11 @@ void BlockExecutive::checkBatch(BatchStatus& status)
     }
 }
 
-std::string BlockExecutive::newEVMAddress(
-    const std::string_view& sender, int64_t blockNumber, int64_t contextID)
+std::string BlockExecutive::newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq)
 {
-    auto hash = m_scheduler->m_hashImpl->hash(std::string(sender) +
-                                              boost::lexical_cast<std::string>(blockNumber) +
-                                              boost::lexical_cast<std::string>(contextID));
+    auto hash = m_scheduler->m_hashImpl->hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
+                                              boost::lexical_cast<std::string>(contextID) + "_" +
+                                              boost::lexical_cast<std::string>(seq));
 
     std::string hexAddress;
     hexAddress.reserve(40);
