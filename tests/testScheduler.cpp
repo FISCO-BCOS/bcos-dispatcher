@@ -118,6 +118,11 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             BOOST_CHECK(!error);
             BOOST_CHECK(config);
             BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+            BOOST_CHECK_EQUAL(config->consensusTimeout(), 200);
+            BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+            BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+            BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+            BOOST_CHECK_EQUAL(config->hash().hex(), h256(110).hex());
         });
 
     BOOST_CHECK(commited);

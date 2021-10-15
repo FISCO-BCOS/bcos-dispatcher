@@ -117,12 +117,6 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
-                    // Move receipts to block
-                    for (auto& it : m_self->m_executiveResults)
-                    {
-                        m_self->m_block->appendReceipt(std::move(it.receipt));
-                    }
-
                     // All Transaction finished, get hash
                     m_self->batchGetHashes([self = m_self, callback = std::move(m_callback)](
                                                Error::UniquePtr&& error, crypto::HashType hash) {
@@ -134,7 +128,17 @@ void BlockExecutive::asyncExecute(
                             return;
                         }
 
-                        self->updateBlockHeader(std::move(hash));
+                        // Set result to m_block
+                        for (auto& it : self->m_executiveResults)
+                        {
+                            self->m_block->appendReceipt(std::move(it.receipt));
+                        }
+
+                        self->m_block->blockHeader()->setStateRoot(std::move(hash));
+                        self->m_block->blockHeader()->setGasUsed(self->m_gasUsed);
+                        self->m_block->blockHeader()->setReceiptsRoot(h256(0));  // TODO: calc the
+                                                                                 // receipt root
+
                         self->m_result = self->m_block->blockHeader();
                         callback(nullptr, self->m_result);
                     });
@@ -275,7 +279,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr&&)> call
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        SCHEDULER_LOG(TRACE) << "Commit for executor: " << it.get();  // TODO: problem here!
+        SCHEDULER_LOG(TRACE) << "NextBlock for executor: " << it.get();
         it->nextBlockHeader(m_block->blockHeaderConst(), [status](bcos::Error::Ptr&& error) {
             if (error)
             {
@@ -300,7 +304,7 @@ void BlockExecutive::batchGetHashes(
     auto totalHash = std::make_shared<h256>();
 
     auto status = std::make_shared<CommitStatus>();
-    status->total = m_scheduler->m_executorManager->size();  // self + all executors
+    status->total = m_scheduler->m_executorManager->size();  // all executors
     status->checkAndCommit = [this, totalHash, callback = std::move(callback)](
                                  const CommitStatus& status) {
         if (status.success + status.failed < status.total)
@@ -387,7 +391,6 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr&&)> ca
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        SCHEDULER_LOG(TRACE) << "Commit for executor: " << it.get();  // TODO: problem here!
         executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
         it->commit(executorParams, [status](bcos::Error::Ptr&& error) {
             if (error)
@@ -610,12 +613,6 @@ void BlockExecutive::checkBatch(BatchStatus& status)
             status.callback(nullptr);
         }
     }
-}
-
-void BlockExecutive::updateBlockHeader(crypto::HashType hash)
-{
-    m_block->blockHeader()->setStateRoot(std::move(hash));
-    m_block->blockHeader()->setGasUsed(m_gasUsed);
 }
 
 std::string BlockExecutive::newEVMAddress(

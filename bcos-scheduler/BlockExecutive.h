@@ -72,7 +72,6 @@ private:
     };
     void startBatch(std::function<void(Error::UniquePtr&&)> callback);
     void checkBatch(BatchStatus& status);
-    void updateBlockHeader(crypto::HashType hash);
 
     std::string newEVMAddress(
         const std::string_view& sender, int64_t blockNumber, int64_t contextID);

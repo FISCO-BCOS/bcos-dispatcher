@@ -62,6 +62,9 @@ public:
     void reset(std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
+    void asyncGetLedgerConfig(
+        std::function<void(Error::Ptr&&, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
+
     std::list<BlockExecutive> m_blocks;
     std::mutex m_blocksMutex;
 

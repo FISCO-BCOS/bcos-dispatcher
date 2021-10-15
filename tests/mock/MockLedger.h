@@ -25,11 +25,17 @@ public:
         std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock)
     {}
 
-    void asyncGetBlockNumber(std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) {}
+    void asyncGetBlockNumber(std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock)
+    {
+        _onGetBlock(nullptr, 100);
+    }
 
     void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, crypto::HashType const&)> _onGetBlock)
-    {}
+    {
+        BOOST_CHECK_EQUAL(_blockNumber, 100);
+        _onGetBlock(nullptr, h256(110));
+    }
 
     void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
         std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock)
@@ -54,11 +60,41 @@ public:
 
     void asyncGetSystemConfigByKey(std::string const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig)
-    {}
+    {
+        if (_key == ledger::SYSTEM_KEY_TX_COUNT_LIMIT)
+        {
+            _onGetConfig(nullptr, "100", 100);
+        }
+        else if (_key == ledger::SYSTEM_KEY_CONSENSUS_TIMEOUT)
+        {
+            _onGetConfig(nullptr, "200", 100);
+        }
+        else if (_key == ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
+        {
+            _onGetConfig(nullptr, "300", 100);
+        }
+        else
+        {
+            BOOST_FAIL("Unknown query key");
+        }
+    }
 
     void asyncGetNodeListByType(std::string const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
-    {}
+    {
+        if (_type == ledger::CONSENSUS_SEALER)
+        {
+            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+        }
+        else if (_type == ledger::CONSENSUS_OBSERVER)
+        {
+            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+        }
+        else
+        {
+            BOOST_FAIL("Unknown query type");
+        }
+    }
 
     void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,
         std::function<void(
