@@ -56,9 +56,10 @@ private:
         std::atomic_size_t failed = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
     };
-    void asyncGetHashes(std::function<void(Error::UniquePtr&&, crypto::HashType)> callback);
-    void asyncBlockCommit(std::function<void(Error::UniquePtr&&)> callback);
-    void asyncBlockRollback(std::function<void(Error::UniquePtr&&)> callback);
+    void batchNextBlock(std::function<void(Error::UniquePtr&&)> callback);
+    void batchGetHashes(std::function<void(Error::UniquePtr&&, crypto::HashType)> callback);
+    void batchBlockCommit(std::function<void(Error::UniquePtr&&)> callback);
+    void batchBlockRollback(std::function<void(Error::UniquePtr&&)> callback);
 
     struct BatchStatus  // Batch state per batch
     {
@@ -71,7 +72,7 @@ private:
     };
     void startBatch(std::function<void(Error::UniquePtr&&)> callback);
     void checkBatch(BatchStatus& status);
-    protocol::BlockHeader::Ptr generateResultBlockHeader(crypto::HashType hash);
+    void updateBlockHeader(crypto::HashType hash);
 
     std::string newEVMAddress(
         const std::string_view& sender, int64_t blockNumber, int64_t contextID);
@@ -100,7 +101,7 @@ private:
     std::vector<ExecutiveResult> m_executiveResults;
 
     std::set<std::string, std::less<>> m_calledContract;
-    std::set<executor::ParallelTransactionExecutorInterface::Ptr> m_calledExecutor;
+    // std::set<executor::ParallelTransactionExecutorInterface::Ptr> m_calledExecutor;
 
     // struct KeyLock
     // {

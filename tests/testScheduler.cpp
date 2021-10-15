@@ -41,11 +41,10 @@ struct SchedulerFixture
         transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite);
         transactionReceiptFactory =
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
-        blockHeaderFactory = std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite);
         executionMessageFactory = std::make_shared<bcos::executor::NativeExecutionMessageFactory>();
 
         scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, transactionReceiptFactory, blockHeaderFactory, hashImpl);
+            executionMessageFactory, transactionReceiptFactory, hashImpl);
 
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
@@ -118,6 +117,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
             BOOST_CHECK(!error);
             BOOST_CHECK(config);
+            BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
         });
 
     BOOST_CHECK(commited);
