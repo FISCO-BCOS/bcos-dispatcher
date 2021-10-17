@@ -45,11 +45,11 @@ struct SchedulerFixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
         executionMessageFactory = std::make_shared<bcos::executor::NativeExecutionMessageFactory>();
 
-        scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, transactionReceiptFactory, hashImpl);
-
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
+
+        scheduler = std::make_shared<scheduler::SchedulerImpl>(
+            executorManager, ledger, storage, executionMessageFactory, blockFactory, hashImpl);
     }
 
     ledger::LedgerInterface::Ptr ledger;

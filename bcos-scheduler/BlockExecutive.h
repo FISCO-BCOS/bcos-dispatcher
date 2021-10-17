@@ -29,8 +29,12 @@ class BlockExecutive
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
 
-    BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler)
-      : m_block(std::move(block)), m_scheduler(scheduler)
+    BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
+        size_t startContextID, bool call)
+      : m_block(std::move(block)),
+        m_scheduler(scheduler),
+        m_startContextID(startContextID),
+        m_call(call)
     {}
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -47,6 +51,8 @@ public:
 
     bcos::protocol::Block::Ptr block() { return m_block; }
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
+
+    bool isCall() { return m_call; }
 
 private:
     struct CommitStatus
@@ -101,11 +107,12 @@ private:
     std::vector<ExecutiveResult> m_executiveResults;
 
     std::set<std::string, std::less<>> m_calledContract;
-
     size_t m_gasUsed = 0;
 
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
+    size_t m_startContextID;
+    bool m_call = false;
 };
 }  // namespace bcos::scheduler

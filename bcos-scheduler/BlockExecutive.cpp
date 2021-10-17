@@ -87,8 +87,7 @@ void BlockExecutive::asyncExecute(
         }
     }
 
-    // Execute nextBlock
-    batchNextBlock([this, callback = std::move(callback)](Error::UniquePtr&& error) {
+    auto startExecute = [this, callback = std::move(callback)](Error::UniquePtr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Next block with error!"
@@ -125,31 +124,46 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
-                    // All Transaction finished, get hash
-                    m_self->batchGetHashes([self = m_self, callback = std::move(m_callback)](
-                                               Error::UniquePtr&& error, crypto::HashType hash) {
-                        if (error)
-                        {
-                            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                         SchedulerError::UnknownError, "Unknown error", *error),
-                                nullptr);
-                            return;
-                        }
-
+                    if (m_self->m_call)
+                    {
                         // Set result to m_block
-                        for (auto& it : self->m_executiveResults)
+                        for (auto& it : m_self->m_executiveResults)
                         {
-                            self->m_block->appendReceipt(std::move(it.receipt));
+                            m_self->m_block->appendReceipt(std::move(it.receipt));
                         }
 
-                        self->m_block->blockHeader()->setStateRoot(std::move(hash));
-                        self->m_block->blockHeader()->setGasUsed(self->m_gasUsed);
-                        self->m_block->blockHeader()->setReceiptsRoot(h256(0));  // TODO: calc the
-                                                                                 // receipt root
+                        m_callback(nullptr, nullptr);
+                    }
+                    else
+                    {
+                        // All Transaction finished, get hash
+                        m_self->batchGetHashes([self = m_self, callback = std::move(m_callback)](
+                                                   Error::UniquePtr&& error,
+                                                   crypto::HashType hash) {
+                            if (error)
+                            {
+                                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                             SchedulerError::UnknownError, "Unknown error", *error),
+                                    nullptr);
+                                return;
+                            }
 
-                        self->m_result = self->m_block->blockHeader();
-                        callback(nullptr, self->m_result);
-                    });
+                            // Set result to m_block
+                            for (auto& it : self->m_executiveResults)
+                            {
+                                self->m_block->appendReceipt(std::move(it.receipt));
+                            }
+
+                            self->m_block->blockHeader()->setStateRoot(std::move(hash));
+                            self->m_block->blockHeader()->setGasUsed(self->m_gasUsed);
+                            self->m_block->blockHeader()->setReceiptsRoot(h256(0));  // TODO: calc
+                                                                                     // the receipt
+                                                                                     // root
+
+                            self->m_result = self->m_block->blockHeader();
+                            callback(nullptr, self->m_result);
+                        });
+                    }
                 }
             }
 
@@ -160,7 +174,17 @@ void BlockExecutive::asyncExecute(
 
         auto batchCallback = std::make_shared<BatchCallback>(this, std::move(callback));
         startBatch(std::bind(&BatchCallback::operator(), batchCallback, std::placeholders::_1));
-    });
+    };
+
+    if (m_call)
+    {
+        startExecute(nullptr);
+    }
+    else
+    {
+        // Execute nextBlock
+        batchNextBlock(std::move(startExecute));
+    }
 }
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept
@@ -538,7 +562,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             {
                 // Execution is finished, generate receipt
                 m_executiveResults[it->contextID].receipt =
-                    m_scheduler->m_transactionReceiptFactory->createReceipt(
+                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
                         it->message->gasAvailable(), it->message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             std::move(it->message->takeLogEntries())),
