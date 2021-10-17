@@ -81,7 +81,7 @@ void BlockExecutive::asyncExecute(
             message->setDepth(0);
             message->setGasAvailable(3000000);  // TODO: add const var
             message->setData(tx->input().toBytes());
-            message->setStaticCall(false);
+            message->setStaticCall(m_staticCall);
 
             m_executiveStates.emplace_back(i, std::move(message));
         }
@@ -124,7 +124,7 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
-                    if (m_self->m_call)
+                    if (m_self->m_staticCall)
                     {
                         // Set result to m_block
                         for (auto& it : m_self->m_executiveResults)
@@ -176,7 +176,7 @@ void BlockExecutive::asyncExecute(
         startBatch(std::bind(&BatchCallback::operator(), batchCallback, std::placeholders::_1));
     };
 
-    if (m_call)
+    if (m_staticCall)
     {
         startExecute(nullptr);
     }
@@ -600,26 +600,34 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         ++batchStatus->total;
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->message->to());
 
-        executor->executeTransaction(
-            std::move(it->message), [this, it, batchStatus](bcos::Error::UniquePtr&& error,
-                                        bcos::protocol::ExecutionMessage::UniquePtr&& response) {
-                ++batchStatus->received;
+        auto executeCallback = [this, it, batchStatus](bcos::Error::UniquePtr&& error,
+                                   bcos::protocol::ExecutionMessage::UniquePtr&& response) {
+            ++batchStatus->received;
 
-                if (error)
-                {
-                    SCHEDULER_LOG(ERROR)
-                        << "Execute transaction error: " << boost::diagnostic_information(*error);
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Execute transaction error: " << boost::diagnostic_information(*error);
 
-                    it->error = std::move(error);
-                    m_executiveStates.erase(it);
-                }
-                else
-                {
-                    it->message = std::move(response);
-                }
+                it->error = std::move(error);
+                m_executiveStates.erase(it);
+            }
+            else
+            {
+                it->message = std::move(response);
+            }
 
-                checkBatch(*batchStatus);
-            });
+            checkBatch(*batchStatus);
+        };
+
+        if (it->message->staticCall())
+        {
+            executor->call(std::move(it->message), std::move(executeCallback));
+        }
+        else
+        {
+            executor->executeTransaction(std::move(it->message), std::move(executeCallback));
+        }
     }
 
     checkBatch(*batchStatus);

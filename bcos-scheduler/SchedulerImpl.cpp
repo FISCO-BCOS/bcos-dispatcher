@@ -185,9 +185,11 @@ void SchedulerImpl::status(
 void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
+    // Create temp block
     auto block = m_blockFactory->createBlock();
     block->appendTransaction(std::move(tx));
 
+    // Create temp executive
     auto blockExecutive =
         std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID++, true);
 

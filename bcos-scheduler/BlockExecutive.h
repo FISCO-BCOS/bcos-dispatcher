@@ -34,7 +34,7 @@ public:
       : m_block(std::move(block)),
         m_scheduler(scheduler),
         m_startContextID(startContextID),
-        m_call(call)
+        m_staticCall(call)
     {}
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -52,7 +52,7 @@ public:
     bcos::protocol::Block::Ptr block() { return m_block; }
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
-    bool isCall() { return m_call; }
+    bool isCall() { return m_staticCall; }
 
 private:
     struct CommitStatus
@@ -113,6 +113,6 @@ private:
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
     size_t m_startContextID;
-    bool m_call = false;
+    bool m_staticCall = false;
 };
 }  // namespace bcos::scheduler
