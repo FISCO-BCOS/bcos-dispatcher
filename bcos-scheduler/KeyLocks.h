@@ -6,6 +6,7 @@
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/indexed_by.hpp>
 #include <boost/multi_index/key.hpp>
+#include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index_container.hpp>
@@ -34,27 +35,33 @@ public:
         std::string contract;
         std::string key;
         int64_t contextID;
+
+        std::string_view contractView() const { return contract; }
+        std::tuple<std::string_view, std::string_view> contractKeyView() const
+        {
+            return {contract, key};
+        }
     };
 
     bool acquireKeyLock(
         const std::string_view& contract, const std::string_view& key, int contextID);
 
     std::vector<std::reference_wrapper<KeyLockItem const>> getKeyLocksByContextID(
-        int contextID) const;
+        int64_t contextID) const;
     std::vector<std::reference_wrapper<KeyLockItem const>> getKeyLocksByContract(
         const std::string_view& contract, int64_t excludeContextID) const;
 
-    void releaseKeyLocks(int contextID);
+    void releaseKeyLocks(int64_t contextID);
 
 private:
     boost::multi_index_container<KeyLockItem,
-        boost::multi_index::indexed_by<boost::multi_index::hashed_unique<
-            boost::multi_index::composite_key<KeyLockItem,
-                boost::multi_index::key<&KeyLockItem::contract>,
-                boost::multi_index::key<&KeyLockItem::key>>,
-            boost::multi_index::hashed_non_unique<boost::multi_index::key<&KeyLockItem::contract>>,
-            boost::multi_index::hashed_non_unique<
-                boost::multi_index::key<&KeyLockItem::contextID>>>>>
+        boost::multi_index::indexed_by<
+            boost::multi_index::hashed_unique<boost::multi_index::const_mem_fun<KeyLockItem,
+                std::tuple<std::string_view, std::string_view>, &KeyLockItem::contractKeyView>>,
+            boost::multi_index::ordered_non_unique<boost::multi_index::const_mem_fun<KeyLockItem,
+                std::string_view, &KeyLockItem::contractView>>,
+            boost::multi_index::ordered_non_unique<
+                boost::multi_index::key<&KeyLockItem::contextID>>>>
         m_keyLocks;
 };
 }  // namespace bcos::executor

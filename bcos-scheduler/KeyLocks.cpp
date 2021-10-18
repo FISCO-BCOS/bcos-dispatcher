@@ -8,8 +8,8 @@ bool KeyLocks::acquireKeyLock(
 {
     assert(contextID >= 0);
 
-    auto it = m_keyLocks.find(std::tuple{contract, key});
-    if (it != m_keyLocks.end())
+    auto it = m_keyLocks.get<0>().find(std::tuple{contract, key});
+    if (it != m_keyLocks.get<0>().end())
     {
         if (it->contextID == contextID)
         {
@@ -25,16 +25,16 @@ bool KeyLocks::acquireKeyLock(
     else
     {
         // No context owing the key, accquire it
-        m_keyLocks.emplace(std::string(contract), std::string(key), contextID);
+        m_keyLocks.emplace(KeyLockItem{std::string(contract), std::string(key), contextID});
         return true;
     }
 }
 
 std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContextID(
-    int contextID) const
+    [[maybe_unused]] int64_t contextID) const
 {
     std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
-    auto range = m_keyLocks.equal_range(contextID);
+    auto range = m_keyLocks.get<2>().equal_range(contextID);
 
     for (auto it = range.first; it != range.second; ++it)
     {
@@ -45,10 +45,11 @@ std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKe
 }
 
 std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContract(
-    const std::string_view& contract, int64_t excludeContextID) const
+    [[maybe_unused]] const std::string_view& contract,
+    [[maybe_unused]] int64_t excludeContextID) const
 {
     std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
-    auto range = m_keyLocks.equal_range(contract);
+    auto range = m_keyLocks.get<1>().equal_range(contract);
 
     for (auto it = range.first; it != range.second; ++it)
     {
@@ -61,12 +62,12 @@ std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKe
     return results;
 }
 
-void KeyLocks::releaseKeyLocks(int contextID)
+void KeyLocks::releaseKeyLocks([[maybe_unused]] int64_t contextID)
 {
-    auto range = m_keyLocks.equal_range(contextID);
+    auto range = m_keyLocks.get<2>().equal_range(contextID);
 
     for (auto it = range.first; it != range.second; ++it)
     {
-        m_keyLocks.erase(it);
+        m_keyLocks.get<2>().erase(it);
     }
 }
