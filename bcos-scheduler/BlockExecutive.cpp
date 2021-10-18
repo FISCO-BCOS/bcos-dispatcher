@@ -262,7 +262,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                     }
 
                     m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        m_currentTimePoint - std::chrono::system_clock::now());
+                        std::chrono::system_clock::now() - m_currentTimePoint);
                     SCHEDULER_LOG(INFO) << "Commit block: " << number()
                                         << " success, execute elapsed: " << m_executeElapsed.count()
                                         << "ms hash elapsed: " << m_hashElapsed.count()
