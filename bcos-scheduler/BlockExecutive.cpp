@@ -553,9 +553,10 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             }
         }
 
+        // Check if another context processing same contract
         if (m_calledContract.find(it->message->to()) != m_calledContract.end())
         {
-            continue;  // Another context processing
+            continue;
         }
 
         m_calledContract.emplace(it->message->to());
@@ -602,12 +603,20 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             it->message->setSeq(it->callStack.top());
             it->message->setCreate(false);
 
+            // Clear the context keyLocks
+            m_keyLocks.releaseKeyLocks(it->contextID);
+
             break;
         }
         // Retry type, send again
         case protocol::ExecutionMessage::WAIT_KEY:
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError, "Unsupported method"));
+            // Try acquire key lock
+            if (!m_keyLocks.acquireKeyLock(
+                    it->message->to(), it->message->keyLockAcquired(), it->message->contextID()))
+            {
+                continue;
+            }
             break;
         }
         // Retry type, send again

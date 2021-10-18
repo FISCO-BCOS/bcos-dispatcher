@@ -4,44 +4,69 @@
 using namespace bcos::executor;
 
 bool KeyLocks::acquireKeyLock(
-    const std::string_view& table, const std::string_view& key, int contextID)
+    const std::string_view& contract, const std::string_view& key, int contextID)
 {
     assert(contextID >= 0);
 
-    auto it = m_key2ContextID.find(std::tuple{table, key});
-    if (it != m_key2ContextID.end())
+    auto it = m_keyLocks.find(std::tuple{contract, key});
+    if (it != m_keyLocks.end())
     {
-        if (it->second == contextID || it->second < 0)
+        if (it->contextID == contextID)
         {
+            // Current context owing the key
             return true;
         }
         else
         {
+            // Another context is owing the key
             return false;
         }
     }
-
-    auto contextIt = m_contextID2Key.find(contextID);
-    if (contextIt != m_contextID2Key.end())
+    else
     {
-        auto inserted =
-            contextIt->second.emplace_front(std::tuple{std::string(table), std::string(key)});
-        m_key2ContextID.emplace(
-            std::tuple{std::get<0>(inserted), std::get<1>(inserted)}, contextID);
+        // No context owing the key, accquire it
+        m_keyLocks.emplace(std::string(contract), std::string(key), contextID);
+        return true;
     }
-    return true;
+}
+
+std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContextID(
+    int contextID) const
+{
+    std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
+    auto range = m_keyLocks.equal_range(contextID);
+
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        results.emplace_back(*it);
+    }
+
+    return results;
+}
+
+std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContract(
+    const std::string_view& contract, int64_t excludeContextID) const
+{
+    std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
+    auto range = m_keyLocks.equal_range(contract);
+
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        if (it->contextID != excludeContextID)
+        {
+            results.emplace_back(*it);
+        }
+    }
+
+    return results;
 }
 
 void KeyLocks::releaseKeyLocks(int contextID)
 {
-    assert(contextID > 0);
+    auto range = m_keyLocks.equal_range(contextID);
 
-    auto it = m_contextID2Key.find(contextID);
-    if (it != m_contextID2Key.end())
+    for (auto it = range.first; it != range.second; ++it)
     {
-        for (auto& key : it->second)
-        {
-            m_key2ContextID[key] = -1;
-        }
+        m_keyLocks.erase(it);
     }
 }
