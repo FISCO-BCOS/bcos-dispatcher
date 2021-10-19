@@ -9,7 +9,7 @@ using namespace bcos::scheduler;
 bool KeyLocks::acquireKeyLock(
     const std::string_view& contract, const std::string_view& key, int64_t contextID, int64_t seq)
 {
-    auto it = m_keyLocks.get<1>().lower_bound(std::tuple{contract, key});
+    auto it = m_keyLocks.get<1>().find(std::tuple{contract, key});
     if (it != m_keyLocks.get<1>().end())
     {
         if (it->contextID != contextID)
@@ -20,10 +20,10 @@ bool KeyLocks::acquireKeyLock(
     }
 
     // Current context owing the key, accquire it
-    auto insertedIt = m_keyLocks.get<1>().emplace_hint(
-        it, KeyLockItem{std::string(contract), std::string(key), contextID, seq});
+    auto [insertedIt, inserted] = m_keyLocks.get<1>().emplace(
+        KeyLockItem{std::string(contract), std::string(key), contextID, seq});
 
-    if (insertedIt == m_keyLocks.get<1>().end())
+    if (!inserted)
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(scheduler::SchedulerError::UnexpectedKeyLockError,
             "Unexpected insert key lock failed!"));
