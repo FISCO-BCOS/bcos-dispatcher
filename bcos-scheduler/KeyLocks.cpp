@@ -1,73 +1,65 @@
 #include "KeyLocks.h"
+#include "Common.h"
 #include <assert.h>
+#include <bcos-framework/libutilities/Error.h>
+#include <boost/throw_exception.hpp>
 
-using namespace bcos::executor;
+using namespace bcos::scheduler;
 
 bool KeyLocks::acquireKeyLock(
-    const std::string_view& contract, const std::string_view& key, int contextID)
+    const std::string_view& contract, const std::string_view& key, int64_t contextID, int64_t seq)
 {
-    assert(contextID >= 0);
-
-    auto it = m_keyLocks.get<0>().find(std::tuple{contract, key});
-    if (it != m_keyLocks.get<0>().end())
+    auto it = m_keyLocks.get<1>().lower_bound(std::tuple{contract, key});
+    if (it != m_keyLocks.get<1>().end())
     {
-        if (it->contextID == contextID)
-        {
-            // Current context owing the key
-            return true;
-        }
-        else
+        if (it->contextID != contextID)
         {
             // Another context is owing the key
             return false;
         }
     }
-    else
-    {
-        // No context owing the key, accquire it
-        m_keyLocks.emplace(KeyLockItem{std::string(contract), std::string(key), contextID});
-        return true;
-    }
-}
 
-std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContextID(
-    [[maybe_unused]] int64_t contextID) const
-{
-    std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
-    auto range = m_keyLocks.get<2>().equal_range(contextID);
+    // Current context owing the key, accquire it
+    auto insertedIt = m_keyLocks.get<1>().emplace_hint(
+        it, KeyLockItem{std::string(contract), std::string(key), contextID, seq});
 
-    for (auto it = range.first; it != range.second; ++it)
+    if (insertedIt == m_keyLocks.get<1>().end())
     {
-        results.emplace_back(*it);
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(scheduler::SchedulerError::UnexpectedKeyLockError,
+            "Unexpected insert key lock failed!"));
     }
 
-    return results;
+    return true;
 }
 
-std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> KeyLocks::getKeyLocksByContract(
-    [[maybe_unused]] const std::string_view& contract,
-    [[maybe_unused]] int64_t excludeContextID) const
+std::vector<std::string> KeyLocks::getKeyLocksByContract(
+    const std::string_view& contract, int64_t excludeContextID) const
 {
-    std::vector<std::reference_wrapper<KeyLocks::KeyLockItem const>> results;
-    auto range = m_keyLocks.get<1>().equal_range(contract);
+    std::vector<std::string> results;
+    auto count = m_keyLocks.get<2>().count(contract);
 
-    for (auto it = range.first; it != range.second; ++it)
+    if (count > 0)
     {
-        if (it->contextID != excludeContextID)
+        auto range = m_keyLocks.get<2>().equal_range(contract);
+
+        for (auto it = range.first; it != range.second; ++it)
         {
-            results.emplace_back(*it);
+            if (it->contextID != excludeContextID)
+            {
+                results.emplace_back(it->key);
+            }
         }
     }
 
     return results;
 }
 
-void KeyLocks::releaseKeyLocks([[maybe_unused]] int64_t contextID)
+void KeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 {
-    auto range = m_keyLocks.get<2>().equal_range(contextID);
+    auto range = m_keyLocks.get<3>().equal_range(std::tuple{contextID, seq});
 
     for (auto it = range.first; it != range.second; ++it)
     {
-        m_keyLocks.get<2>().erase(it);
+        m_keyLocks.get<3>().erase(it);
     }
 }

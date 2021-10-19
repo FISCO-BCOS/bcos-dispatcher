@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bits/stdint-uintn.h>
 namespace bcos::scheduler
 {
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
@@ -14,6 +15,9 @@ enum SchedulerError
     PrewriteBlockError,
     CommitError,
     RollbackError,
+    UnexpectedKeyLockError,
 };
+
+inline const uint64_t TRANSACTION_GAS = 30000000;
 
 }  // namespace bcos::scheduler

@@ -48,7 +48,7 @@ void BlockExecutive::asyncExecute(
             }
 
             message->setDepth(0);
-            message->setGasAvailable(3000000);  // TODO: add const var
+            message->setGasAvailable(TRANSACTION_GAS);
             message->setStaticCall(false);
 
             m_executiveStates.emplace_back(i, std::move(message));
@@ -82,7 +82,7 @@ void BlockExecutive::asyncExecute(
             }
 
             message->setDepth(0);
-            message->setGasAvailable(3000000);  // TODO: add const var
+            message->setGasAvailable(TRANSACTION_GAS);
             message->setData(tx->input().toBytes());
             message->setStaticCall(m_staticCall);
 
@@ -563,8 +563,20 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         switch (it->message->type())
         {
         // Request type, push stack
-        case protocol::ExecutionMessage::TXHASH:
         case protocol::ExecutionMessage::MESSAGE:
+            // If call with key locks, accquire it
+            for (auto& keyLockIt : it->message->keyLocks())
+            {
+                if (!m_keyLocks.acquireKeyLock(
+                        it->message->from(), keyLockIt, it->contextID, it->message->seq()))
+                {
+                    batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(
+                        UnexpectedKeyLockError, "Unexpected key lock error!"));
+                    return;
+                }
+            }
+            [[fallthrough]];
+        case protocol::ExecutionMessage::TXHASH:
         {
             auto seq = it->currentSeq++;
 
@@ -572,12 +584,19 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
 
             it->message->setSeq(seq);
 
+            // Set current key lock into message
+            auto keyLocks = m_keyLocks.getKeyLocksByContract(it->message->to(), it->contextID);
+            it->message->setKeyLocks(std::move(keyLocks));
+
             break;
         }
         // Return type, pop stack
         case protocol::ExecutionMessage::FINISHED:
         case protocol::ExecutionMessage::REVERT:
         {
+            // Clear the context keyLocks
+            m_keyLocks.releaseKeyLocks(it->contextID, it->message->seq());
+
             it->callStack.pop();
 
             // Empty stack, execution is finished
@@ -593,7 +612,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                         m_block->blockHeaderConst()->number());
 
                 // Calc the gas
-                ++m_gasUsed;  // TODO: calc the total gas used
+                m_gasUsed += (TRANSACTION_GAS - it->message->gasAvailable());
 
                 // Remove executive state and continue
                 it = m_executiveStates.erase(it);
@@ -603,20 +622,39 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             it->message->setSeq(it->callStack.top());
             it->message->setCreate(false);
 
-            // Clear the context keyLocks
-            m_keyLocks.releaseKeyLocks(it->contextID);
-
             break;
         }
         // Retry type, send again
         case protocol::ExecutionMessage::WAIT_KEY:
         {
+            if (!it->message->keyLocks().empty())
+            {
+                // If call with key locks, accquire it
+                for (auto& keyLockIt : it->message->keyLocks())
+                {
+                    if (!m_keyLocks.acquireKeyLock(
+                            it->message->from(), keyLockIt, it->contextID, it->message->seq()))
+                    {
+                        callback(BCOS_ERROR_UNIQUE_PTR(
+                            UnexpectedKeyLockError, "Unexpected key lock error!"));
+                        return;
+                    }
+                }
+
+                it->message->setKeyLocks({});
+            }
+
             // Try acquire key lock
-            if (!m_keyLocks.acquireKeyLock(
-                    it->message->to(), it->message->keyLockAcquired(), it->message->contextID()))
+            if (!m_keyLocks.acquireKeyLock(it->message->to(), it->message->keyLockAcquired(),
+                    it->message->contextID(), it->message->seq()))
             {
                 continue;
             }
+
+            // Set current key lock into message
+            auto keyLocks = m_keyLocks.getKeyLocksByContract(it->message->to(), it->contextID);
+            it->message->setKeyLocks(std::move(keyLocks));
+
             break;
         }
         // Retry type, send again
