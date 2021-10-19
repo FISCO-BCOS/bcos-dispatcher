@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(getKeyLocksByContract)
 
     for (size_t i = 100; i < 200; ++i)
     {
-        keyLocks.acquireKeyLock(to, keyPrefix, 101, 20);
+        keyLocks.acquireKeyLock(to, keyPrefix + boost::lexical_cast<std::string>(i), 101, 20);
     }
 
     auto keys = keyLocks.getKeyLocksByContract(to, 101);

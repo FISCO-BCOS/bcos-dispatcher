@@ -57,9 +57,5 @@ std::vector<std::string> KeyLocks::getKeyLocksByContract(
 void KeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 {
     auto range = m_keyLocks.get<3>().equal_range(std::tuple{contextID, seq});
-
-    for (auto it = range.first; it != range.second; ++it)
-    {
-        m_keyLocks.get<3>().erase(it);
-    }
+    m_keyLocks.get<3>().erase(range.first, range.second);
 }
