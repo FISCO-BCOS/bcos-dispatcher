@@ -1,6 +1,7 @@
 #pragma once
 
-#include <bits/stdint-uintn.h>
+#include <cstdint>
+
 namespace bcos::scheduler
 {
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
