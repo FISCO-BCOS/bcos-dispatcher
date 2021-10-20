@@ -145,7 +145,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             return;
         }
 
-
         asyncGetLedgerConfig([this, callback = std::move(callback)](
                                  Error::Ptr&& error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (error)

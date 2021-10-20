@@ -582,10 +582,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
 
             it->message->setSeq(seq);
 
-            // Set current key lock into message
-            auto keyLocks = m_keyLocks.getKeyLocksByContract(it->message->to(), it->contextID);
-            it->message->setKeyLocks(std::move(keyLocks));
-
             break;
         }
         // Return type, pop stack
@@ -649,10 +645,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                 continue;
             }
 
-            // Set current key lock into message
-            auto keyLocks = m_keyLocks.getKeyLocksByContract(it->message->to(), it->contextID);
-            it->message->setKeyLocks(std::move(keyLocks));
-
             break;
         }
         // Retry type, send again
@@ -663,6 +655,10 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             break;
         }
         }
+
+        // Set current key lock into message
+        auto keyLocks = m_keyLocks.getKeyLocksByContract(it->message->to(), it->contextID);
+        it->message->setKeyLocks(std::move(keyLocks));
 
         ++batchStatus->total;
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->message->to());
