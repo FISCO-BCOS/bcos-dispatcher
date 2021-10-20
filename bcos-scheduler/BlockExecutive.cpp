@@ -557,12 +557,9 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
             continue;
         }
 
-        m_calledContract.emplace(it->message->to());
-        switch (it->message->type())
+        // If call with key locks, acquire it
+        if (!it->message->keyLocks().empty())
         {
-        // Request type, push stack
-        case protocol::ExecutionMessage::MESSAGE:
-            // If call with key locks, accquire it
             for (auto& keyLockIt : it->message->keyLocks())
             {
                 if (!m_keyLocks.acquireKeyLock(
@@ -573,7 +570,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                     return;
                 }
             }
-            [[fallthrough]];
+
+            it->message->setKeyLocks({});
+        }
+
+        m_calledContract.emplace(it->message->to());
+        switch (it->message->type())
+        {
+        // Request type, push stack
+        case protocol::ExecutionMessage::MESSAGE:
         case protocol::ExecutionMessage::TXHASH:
         {
             auto seq = it->currentSeq++;
@@ -621,23 +626,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
         // Retry type, send again
         case protocol::ExecutionMessage::WAIT_KEY:
         {
-            if (!it->message->keyLocks().empty())
-            {
-                // If call with key locks, accquire it
-                for (auto& keyLockIt : it->message->keyLocks())
-                {
-                    if (!m_keyLocks.acquireKeyLock(
-                            it->message->from(), keyLockIt, it->contextID, it->message->seq()))
-                    {
-                        batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(
-                            UnexpectedKeyLockError, "Unexpected key lock error!"));
-                        return;
-                    }
-                }
-
-                it->message->setKeyLocks({});
-            }
-
             // Try acquire key lock
             if (!m_keyLocks.acquireKeyLock(it->message->to(), it->message->keyLockAcquired(),
                     it->message->contextID(), it->message->seq()))
