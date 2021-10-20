@@ -605,8 +605,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                     m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
                         it->message->gasAvailable(), it->message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
-                            std::move(it->message->takeLogEntries())),
-                        it->message->status(), std::move(it->message->takeData()),
+                            it->message->takeLogEntries()),
+                        it->message->status(), it->message->takeData(),
                         m_block->blockHeaderConst()->number());
 
                 // Calc the gas
@@ -633,7 +633,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback
                     if (!m_keyLocks.acquireKeyLock(
                             it->message->from(), keyLockIt, it->contextID, it->message->seq()))
                     {
-                        callback(BCOS_ERROR_UNIQUE_PTR(
+                        batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(
                             UnexpectedKeyLockError, "Unexpected key lock error!"));
                         return;
                     }
