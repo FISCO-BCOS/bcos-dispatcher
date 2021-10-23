@@ -287,6 +287,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                     {
                         ++status->success;
                     }
+
                     executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
                     executorParams.number = number();
                     executorParams.primaryTableName = SYS_CURRENT_STATE;
@@ -458,8 +459,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr&&)> ca
                     {
                         ++status->success;
                     }
+                    status->checkAndCommit(*status);
                 });
-                status->checkAndCommit(*status);
             });
     });
 }
