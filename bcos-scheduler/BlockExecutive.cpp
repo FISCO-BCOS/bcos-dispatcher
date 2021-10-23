@@ -659,8 +659,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 
         auto executeCallback = [this, it, batchStatus](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& response) {
-            ++batchStatus->received;
-
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -674,6 +672,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 it->message = std::move(response);
             }
 
+            ++batchStatus->received;
             checkBatch(*batchStatus);
         };
 
