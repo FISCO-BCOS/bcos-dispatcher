@@ -18,7 +18,7 @@ using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
 void BlockExecutive::asyncExecute(
-    std::function<void(Error::UniquePtr&&, protocol::BlockHeader::Ptr)> callback) noexcept
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback) noexcept
 {
     if (m_result)
     {
@@ -202,7 +202,7 @@ void BlockExecutive::asyncExecute(
     }
 }
 
-void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callback) noexcept
+void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback) noexcept
 {
     auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
@@ -313,7 +313,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
         });
 }
 
-void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr&&)> callback)
+void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = m_scheduler->m_executorManager->size();
@@ -357,7 +357,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr&&)> call
 }
 
 void BlockExecutive::batchGetHashes(
-    std::function<void(bcos::Error::UniquePtr&&, bcos::crypto::HashType)> callback)
+    std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)> callback)
 {
     auto mutex = std::make_shared<std::mutex>();
     auto totalHash = std::make_shared<h256>();
@@ -409,7 +409,7 @@ void BlockExecutive::batchGetHashes(
     }
 }
 
-void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr&&)> callback)
+void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
@@ -470,7 +470,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr&&)> ca
     });
 }
 
-void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr&&)> callback)
+void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
@@ -530,7 +530,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr&&)> 
     }
 }
 
-void BlockExecutive::startBatch(std::function<void(Error::UniquePtr&&)> callback)
+void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 {
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->callback = std::move(callback);
@@ -697,6 +697,9 @@ void BlockExecutive::checkBatch(BatchStatus& status)
         bool expect = false;
         if (status.callbackExecuted.compare_exchange_strong(expect, true))  // Run callback once
         {
+            SCHEDULER_LOG(DEBUG) << "Enter checkBatch callback: " << status.total << " "
+                                 << status.received;
+
             size_t errorCount = 0;
             size_t successCount = 0;
 
