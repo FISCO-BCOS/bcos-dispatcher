@@ -303,8 +303,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                                 {
                                     ++status->success;
                                 }
+                                status->checkAndCommit(*status);
                             });
-                            status->checkAndCommit(*status);
                         });
                 });
         });
