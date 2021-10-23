@@ -264,7 +264,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
 
                     m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now() - m_currentTimePoint);
-                    SCHEDULER_LOG(INFO) << "Commit block: " << number()
+                    SCHEDULER_LOG(INFO) << "CommitBlock: " << number()
                                         << " success, execute elapsed: " << m_executeElapsed.count()
                                         << "ms hash elapsed: " << m_hashElapsed.count()
                                         << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
@@ -303,6 +303,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr&&)> callbac
                                 else
                                 {
                                     ++status->success;
+                                    SCHEDULER_LOG(DEBUG)
+                                        << "Prepare executor success, success: " << status->success;
                                 }
                                 status->checkAndCommit(*status);
                             });
@@ -385,24 +387,25 @@ void BlockExecutive::batchGetHashes(
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        it->getHash(number(),
-            [status, mutex, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
-                if (error)
-                {
-                    SCHEDULER_LOG(ERROR)
-                        << "Commit executor error!" << boost::diagnostic_information(*error);
-                    ++status->failed;
-                }
-                else
-                {
-                    ++status->success;
+        it->getHash(number(), [status, mutex, totalHash](
+                                  bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Commit executor error!" << boost::diagnostic_information(*error);
+                ++status->failed;
+            }
+            else
+            {
+                ++status->success;
+                SCHEDULER_LOG(DEBUG) << "GetHash executor success, success: " << status->success;
 
-                    std::unique_lock<std::mutex> lock(*mutex);
-                    *totalHash ^= hash;
-                }
+                std::unique_lock<std::mutex> lock(*mutex);
+                *totalHash ^= hash;
+            }
 
-                status->checkAndCommit(*status);
-            });
+            status->checkAndCommit(*status);
+        });
     }
 }
 
@@ -458,6 +461,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr&&)> ca
                     else
                     {
                         ++status->success;
+                        SCHEDULER_LOG(DEBUG)
+                            << "Commit executor success, success: " << status->success;
                     }
                     status->checkAndCommit(*status);
                 });
