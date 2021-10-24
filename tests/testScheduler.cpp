@@ -14,6 +14,7 @@
 #include "mock/MockExecutorForCall.h"
 #include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger.h"
+#include "mock/MockParallelExecutor.h"
 #include "mock/MockTransactionalStorage.h"
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
@@ -139,7 +140,23 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
     BOOST_CHECK(commited);
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
+}
 
+BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
+{
+    // Add executor
+    executorManager->addExecutor("executor1", std::make_shared<MockParallelExecutor>("executor1"));
+
+    // Generate a test block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(100);
+
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract1");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(call)

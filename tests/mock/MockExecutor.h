@@ -44,7 +44,7 @@ public:
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) noexcept override
+            callback) override
     {}
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
