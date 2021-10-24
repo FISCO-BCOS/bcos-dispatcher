@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <iterator>
+#include <thread>
 
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
@@ -122,6 +123,7 @@ void BlockExecutive::asyncExecute(
 
                 if (!m_self->m_executiveStates.empty())
                 {
+                    SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
                     m_self->m_calledContract.clear();
 
                     m_self->startBatch(std::bind(
@@ -129,6 +131,7 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
+                    SCHEDULER_LOG(TRACE) << "Empty states, end";
                     auto now = std::chrono::system_clock::now();
                     m_self->m_executeElapsed =
                         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -535,8 +538,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->callback = std::move(callback);
 
-    for (auto it = m_executiveStates.begin();; ++it)
+    bool deleted = true;
+    for (auto it = m_executiveStates.begin();;)
     {
+        if (!deleted)
+        {
+            ++it;
+        }
+        deleted = false;
+
         if (it == m_executiveStates.end())
         {
             batchStatus->allSended = true;
@@ -557,12 +567,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             }
         }
 
-        // Check if another context processing same contract
-        if (m_calledContract.find(it->message->to()) != m_calledContract.end())
-        {
-            continue;
-        }
-
         // If call with key locks, acquire it
         if (!it->message->keyLocks().empty())
         {
@@ -580,13 +584,22 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             it->message->setKeyLocks({});
         }
 
-        m_calledContract.emplace(it->message->to());
         switch (it->message->type())
         {
         // Request type, push stack
         case protocol::ExecutionMessage::MESSAGE:
         case protocol::ExecutionMessage::TXHASH:
         {
+            // Check if another context processing same contract
+            auto contractIt = m_calledContract.lower_bound(it->message->to());
+            if (contractIt != m_calledContract.end() && *contractIt == it->message->to())
+            {
+                continue;
+            }
+            m_calledContract.emplace_hint(contractIt, it->message->to());
+            SCHEDULER_LOG(TRACE) << "Executing: " << it->message->transactionHash().hex() << " "
+                                 << it->message->to();
+
             auto seq = it->currentSeq++;
 
             it->callStack.push(seq);
@@ -620,7 +633,11 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 m_gasUsed += (TRANSACTION_GAS - it->message->gasAvailable());
 
                 // Remove executive state and continue
-                it = m_executiveStates.erase(it);
+                SCHEDULER_LOG(TRACE) << "Eraseing: " << it->message->transactionHash().hex() << " "
+                                     << it->message->to();
+
+                it = m_executiveStates.erase(it);  // FIXME: bug jump to next it
+                deleted = true;
                 continue;
             }
 
@@ -672,6 +689,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 it->message = std::move(response);
             }
 
+            SCHEDULER_LOG(TRACE) << "Execute is finished!";
+
             ++batchStatus->received;
             checkBatch(*batchStatus);
         };
@@ -697,7 +716,8 @@ void BlockExecutive::checkBatch(BatchStatus& status)
         if (status.callbackExecuted.compare_exchange_strong(expect, true))  // Run callback once
         {
             SCHEDULER_LOG(DEBUG) << "Enter checkBatch callback: " << status.total << " "
-                                 << status.received;
+                                 << status.received << " " << std::this_thread::get_id() << " "
+                                 << status.callbackExecuted;
 
             size_t errorCount = 0;
             size_t successCount = 0;
