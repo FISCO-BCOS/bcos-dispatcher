@@ -202,6 +202,27 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 }
 
+BOOST_AUTO_TEST_CASE(keyLocks)
+{
+    // Add executor
+    executorManager->addExecutor(
+        "executor1", std::make_shared<MockMultiParallelExecutor>("executor1"));
+
+    // Generate a test block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(100);
+
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        for (size_t j = 0; j < 8; ++j)
+        {
+            auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+                h256(i * j), "contract" + boost::lexical_cast<std::string>(j));
+            block->appendTransactionMetaData(std::move(metaTx));
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(call)
 {
     // Add executor
