@@ -84,6 +84,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         }
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
                             << LOG_KV("state root", header->stateRoot().hex());
+
+        executeLock->unlock();
         callback(std::move(error), std::move(header));
     });
 }
