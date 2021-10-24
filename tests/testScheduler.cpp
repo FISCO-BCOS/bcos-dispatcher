@@ -197,6 +197,8 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
             commitPromise.set_value();
         });
 
+    commitPromise.get_future().get();
+
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 }
 
