@@ -19,11 +19,11 @@
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
-#include <bcos-tars-protocol/BlockFactoryImpl.h>
-#include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
-#include <bcos-tars-protocol/TransactionFactoryImpl.h>
-#include <bcos-tars-protocol/TransactionMetaDataImpl.h>
-#include <bcos-tars-protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -273,7 +273,10 @@ BOOST_AUTO_TEST_CASE(createContract)
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
 
-    auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(1), "");
+    auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+        [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
+    metaTx->setHash(h256(1));
+    metaTx->setTo("");
     block->appendTransactionMetaData(std::move(metaTx));
 
     bcos::protocol::BlockHeader::Ptr executedHeader;
