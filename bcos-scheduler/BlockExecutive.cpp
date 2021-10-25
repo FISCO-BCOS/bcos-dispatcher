@@ -19,7 +19,7 @@ using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
 void BlockExecutive::asyncExecute(
-    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback) noexcept
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
     if (m_result)
     {
@@ -55,6 +55,7 @@ void BlockExecutive::asyncExecute(
             message->setStaticCall(false);
 
             m_executiveStates.emplace_back(i, std::move(message));
+            m_executiveResults[i].submitCallback = metaData->submitCallback();
         }
     }
     else if (m_block->transactionsSize() > 0)
@@ -205,7 +206,7 @@ void BlockExecutive::asyncExecute(
     }
 }
 
-void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback) noexcept
+void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
     auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
@@ -314,6 +315,15 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         });
                 });
         });
+}
+
+void BlockExecutive::asyncNotify()
+{
+    for (auto& it : m_executiveResults)
+    {
+        bcos::protocol::TransactionSubmitResult::Ptr submitResult;
+        it.submitCallback(nullptr, it.receipt);
+    }
 }
 
 void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callback)
@@ -738,8 +748,8 @@ void BlockExecutive::checkBatch(BatchStatus& status)
             }
 
             SCHEDULER_LOG(TRACE) << "Batch run success"
-                                << " total: " << errorCount + successCount
-                                << " success: " << successCount << " error: " << errorCount;
+                                 << " total: " << errorCount + successCount
+                                 << " success: " << successCount << " error: " << errorCount;
 
             if (errorCount > 0)
             {

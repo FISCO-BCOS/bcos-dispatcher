@@ -46,9 +46,11 @@ public:
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
     void asyncExecute(
-        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback) noexcept;
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
 
-    void asyncCommit(std::function<void(Error::UniquePtr)> callback) noexcept;
+    void asyncCommit(std::function<void(Error::UniquePtr)> callback);
+
+    void asyncNotify();
 
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
@@ -106,6 +108,7 @@ private:
     struct ExecutiveResult
     {
         bcos::protocol::TransactionReceipt::Ptr receipt;
+        bcos::protocol::TxSubmitCallback submitCallback;
     };
     std::vector<ExecutiveResult> m_executiveResults;
 
