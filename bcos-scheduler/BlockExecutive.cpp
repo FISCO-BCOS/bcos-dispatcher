@@ -715,7 +715,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
         bool expect = false;
         if (status.callbackExecuted.compare_exchange_strong(expect, true))  // Run callback once
         {
-            SCHEDULER_LOG(DEBUG) << "Enter checkBatch callback: " << status.total << " "
+            SCHEDULER_LOG(TRACE) << "Enter checkBatch callback: " << status.total << " "
                                  << status.received << " " << std::this_thread::get_id() << " "
                                  << status.callbackExecuted;
 
@@ -737,7 +737,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                 }
             }
 
-            SCHEDULER_LOG(INFO) << "Batch run success"
+            SCHEDULER_LOG(TRACE) << "Batch run success"
                                 << " total: " << errorCount + successCount
                                 << " success: " << successCount << " error: " << errorCount;
 
