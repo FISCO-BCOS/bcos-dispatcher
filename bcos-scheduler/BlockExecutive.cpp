@@ -322,7 +322,9 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
         });
 }
 
-void BlockExecutive::asyncNotify(bcos::rpc::RPCInterface& rpc)
+void BlockExecutive::asyncNotify(
+    std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>&
+        notifier)
 {
     auto blockHash = m_block->blockHeaderConst()->hash();
 
@@ -338,7 +340,7 @@ void BlockExecutive::asyncNotify(bcos::rpc::RPCInterface& rpc)
             submitResult->setStatus(it.receipt->status());
             submitResult->setTransactionReceipt(it.receipt);
 
-            rpc.asyncNotifyTransactionResult("", it.transactionHash, std::move(submitResult));
+            notifier(it.transactionHash, std::move(submitResult));
         }
     }
 }

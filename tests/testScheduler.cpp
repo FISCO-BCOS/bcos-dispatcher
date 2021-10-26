@@ -61,11 +61,29 @@ struct SchedulerFixture
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
 
-        mockRPC = std::make_shared<MockRPC>();
+        auto notifier = [latch = &latch](bcos::crypto::HashType,
+                            bcos::protocol::TransactionSubmitResult::Ptr result) {
+            SCHEDULER_LOG(TRACE) << "Submit callback execute";
+
+            BOOST_CHECK_EQUAL(result->status(), 0);
+            BOOST_CHECK_NE(result->blockHash(), h256(0));
+            BOOST_CHECK(result->transactionReceipt());
+            BOOST_CHECK_LT(result->transactionIndex(), 1000 * 8);
+
+            auto receipt = result->transactionReceipt();
+            auto output = receipt->output();
+            std::string_view outputStr((char*)output.data(), output.size());
+            BOOST_CHECK_EQUAL(outputStr, "Hello world!");
+
+            if (latch)
+            {
+                latch->get()->count_down();
+            }
+        };
 
         scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, transactionSubmitResultFactory, mockRPC,
-            hashImpl);
+            executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl,
+            notifier);
 
         keyPair = suite->signatureImpl()->generateKeyPair();
     }
@@ -85,7 +103,8 @@ struct SchedulerFixture
     bcos::crypto::CryptoSuite::Ptr suite;
     bcostars::protocol::BlockFactoryImpl::Ptr blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory;
-    std::shared_ptr<MockRPC> mockRPC;
+
+    std::unique_ptr<boost::latch> latch;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Scheduler, SchedulerFixture)
@@ -166,7 +185,7 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
 
-    boost::latch latch(8 * 1000);
+    latch = std::make_unique<boost::latch>(8 * 1000);
     for (size_t i = 0; i < 1000; ++i)
     {
         for (size_t j = 0; j < 8; ++j)
@@ -177,8 +196,6 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
             block->appendTransactionMetaData(std::move(metaTx));
         }
     }
-
-    mockRPC->latch = &latch;
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
 
@@ -218,7 +235,7 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
 
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 
-    latch.wait();
+    latch->wait();
 }
 
 BOOST_AUTO_TEST_CASE(keyLocks)

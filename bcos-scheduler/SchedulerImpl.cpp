@@ -163,7 +163,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                 << LOG_KV("block number", ledgerConfig->blockNumber());
 
             auto& executive = m_blocks.front();
-            executive.asyncNotify(*m_rpc);
+            if (m_txNotifier)
+            {
+                executive.asyncNotify(m_txNotifier);
+            }
 
             std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
             m_blocks.pop_front();

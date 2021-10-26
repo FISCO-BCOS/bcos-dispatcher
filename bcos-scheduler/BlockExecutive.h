@@ -14,7 +14,6 @@
 #include "interfaces/protocol/BlockHeaderFactory.h"
 #include "interfaces/protocol/TransactionMetaData.h"
 #include "interfaces/protocol/TransactionReceiptFactory.h"
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
@@ -54,7 +53,9 @@ public:
 
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
-    void asyncNotify(bcos::rpc::RPCInterface& rpc);
+    void asyncNotify(
+        std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>&
+            notifier);
 
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 

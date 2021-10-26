@@ -4,6 +4,7 @@
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "interfaces/crypto/CommonType.h"
 #include "libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
@@ -23,15 +24,17 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::rpc::RPCInterface::Ptr rpc, bcos::crypto::Hash::Ptr hashImpl)
+        bcos::crypto::Hash::Ptr hashImpl,
+        std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>
+            txNotifier)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_blockFactory(std::move(blockFactory)),
-        m_rpc(std::move(rpc)),
-        m_hashImpl(std::move(hashImpl))
+        m_hashImpl(std::move(hashImpl)),
+        m_txNotifier(txNotifier)
     {}
 
     SchedulerImpl(const SchedulerImpl&) = delete;
@@ -83,9 +86,10 @@ private:
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::rpc::RPCInterface::Ptr m_rpc;
     bcos::crypto::Hash::Ptr m_hashImpl;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
+    std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>
+        m_txNotifier;
 };
 }  // namespace bcos::scheduler
