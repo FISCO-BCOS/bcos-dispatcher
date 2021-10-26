@@ -24,17 +24,14 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl,
-        std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>
-            txNotifier)
+        bcos::crypto::Hash::Ptr hashImpl)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_blockFactory(std::move(blockFactory)),
-        m_hashImpl(std::move(hashImpl)),
-        m_txNotifier(txNotifier)
+        m_hashImpl(std::move(hashImpl))
     {}
 
     SchedulerImpl(const SchedulerImpl&) = delete;
@@ -67,6 +64,10 @@ public:
 
     void registerBlockNumberReceiver(
         std::function<void(protocol::BlockNumber blockNumber)> callback) override;
+
+    void registerTransactionNotifier(
+        std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>
+            txNotifier);
 
 private:
     void asyncGetLedgerConfig(

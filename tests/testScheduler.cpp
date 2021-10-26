@@ -32,6 +32,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/thread/latch.hpp>
 #include <future>
+#include <memory>
 
 namespace bcos::test
 {
@@ -82,8 +83,10 @@ struct SchedulerFixture
         };
 
         scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl,
-            notifier);
+            executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl);
+
+        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->registerTransactionNotifier(
+            std::move(notifier));
 
         keyPair = suite->signatureImpl()->generateKeyPair();
     }

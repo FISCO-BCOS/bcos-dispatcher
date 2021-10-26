@@ -256,6 +256,13 @@ void SchedulerImpl::registerBlockNumberReceiver(
     m_blockNumberReceiver = std::move(callback);
 }
 
+void SchedulerImpl::registerTransactionNotifier(
+    std::function<void(bcos::crypto::HashType, bcos::protocol::TransactionSubmitResult::Ptr)>
+        txNotifier)
+{
+    m_txNotifier = std::move(txNotifier);
+}
+
 template <class... Ts>
 struct overloaded : Ts...
 {
