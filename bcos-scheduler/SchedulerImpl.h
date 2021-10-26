@@ -4,6 +4,7 @@
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <tbb/concurrent_hash_map.h>
@@ -19,11 +20,14 @@ public:
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::crypto::Hash::Ptr hashImpl)
+        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bcos::crypto::Hash::Ptr hashImpl)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_blockFactory(std::move(blockFactory)),
         m_hashImpl(std::move(hashImpl))
     {}
@@ -75,6 +79,7 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
 

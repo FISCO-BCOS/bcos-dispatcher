@@ -6,6 +6,7 @@
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-framework/libutilities/Error.h"
 #include "bcos-scheduler/ExecutorManager.h"
 #include "interfaces/crypto/CommonType.h"
@@ -33,11 +34,14 @@ public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
-        size_t startContextID, bool call)
+        size_t startContextID,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bool staticCall)
       : m_block(std::move(block)),
         m_scheduler(scheduler),
         m_startContextID(startContextID),
-        m_staticCall(call)
+        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
+        m_staticCall(staticCall)
     {}
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -45,8 +49,7 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void asyncExecute(
-        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
 
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
@@ -127,6 +130,7 @@ private:
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
     size_t m_startContextID;
+    bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bool m_staticCall = false;
 };
 }  // namespace bcos::scheduler

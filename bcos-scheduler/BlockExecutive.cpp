@@ -144,7 +144,7 @@ void BlockExecutive::asyncExecute(
                         // Set result to m_block
                         for (auto& it : m_self->m_executiveResults)
                         {
-                            m_self->m_block->appendReceipt(std::move(it.receipt));
+                            m_self->m_block->appendReceipt(it.receipt);
                         }
 
                         m_callback(nullptr, nullptr);
@@ -170,10 +170,10 @@ void BlockExecutive::asyncExecute(
                             // Set result to m_block
                             for (auto& it : self->m_executiveResults)
                             {
-                                self->m_block->appendReceipt(std::move(it.receipt));
+                                self->m_block->appendReceipt(it.receipt);
                             }
 
-                            self->m_block->blockHeader()->setStateRoot(std::move(hash));
+                            self->m_block->blockHeader()->setStateRoot(hash);
                             self->m_block->blockHeader()->setGasUsed(self->m_gasUsed);
                             self->m_block->blockHeader()->setReceiptsRoot(h256(0));  // TODO: calc
                                                                                      // the receipt
@@ -319,10 +319,25 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
 void BlockExecutive::asyncNotify()
 {
+    auto blockHash = m_block->blockHeaderConst()->hash();
+
+    size_t index = 0;
     for (auto& it : m_executiveResults)
     {
-        bcos::protocol::TransactionSubmitResult::Ptr submitResult;
-        it.submitCallback(nullptr, it.receipt);
+        if (it.submitCallback)
+        {
+            auto submitResult = m_transactionSubmitResultFactory->createTxSubmitResult();
+            submitResult->setTransactionIndex(index++);
+            submitResult->setBlockHash(blockHash);
+            // submitResult->setTxHash();
+            submitResult->setStatus(it.receipt->status());
+            submitResult->setTransactionReceipt(it.receipt);
+
+            if (it.submitCallback)
+            {
+                it.submitCallback(nullptr, submitResult);
+            }
+        }
     }
 }
 
