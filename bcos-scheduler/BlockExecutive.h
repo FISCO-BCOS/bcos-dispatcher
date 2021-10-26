@@ -111,6 +111,7 @@ private:
     struct ExecutiveResult
     {
         bcos::protocol::TransactionReceipt::Ptr receipt;
+        bcos::crypto::HashType transactionHash;
         bcos::protocol::TxSubmitCallback submitCallback;
     };
     std::vector<ExecutiveResult> m_executiveResults;

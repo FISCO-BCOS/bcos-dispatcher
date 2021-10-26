@@ -55,7 +55,12 @@ void BlockExecutive::asyncExecute(
             message->setStaticCall(false);
 
             m_executiveStates.emplace_back(i, std::move(message));
-            m_executiveResults[i].submitCallback = metaData->submitCallback();
+
+            if (metaData->submitCallback())
+            {
+                m_executiveResults[i].transactionHash = metaData->hash();
+                m_executiveResults[i].submitCallback = metaData->submitCallback();
+            }
         }
     }
     else if (m_block->transactionsSize() > 0)
@@ -329,7 +334,7 @@ void BlockExecutive::asyncNotify()
             auto submitResult = m_transactionSubmitResultFactory->createTxSubmitResult();
             submitResult->setTransactionIndex(index++);
             submitResult->setBlockHash(blockHash);
-            // submitResult->setTxHash();
+            submitResult->setTxHash(it.transactionHash);
             submitResult->setStatus(it.receipt->status());
             submitResult->setTransactionReceipt(it.receipt);
 
