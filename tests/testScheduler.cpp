@@ -18,6 +18,7 @@
 #include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger.h"
 #include "mock/MockMultiParallelExecutor.h"
+#include "mock/MockRPC.h"
 #include "mock/MockTransactionalStorage.h"
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
@@ -60,8 +61,11 @@ struct SchedulerFixture
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
 
+        mockRPC = std::make_shared<MockRPC>();
+
         scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl);
+            executionMessageFactory, blockFactory, transactionSubmitResultFactory, mockRPC,
+            hashImpl);
 
         keyPair = suite->signatureImpl()->generateKeyPair();
     }
@@ -81,6 +85,7 @@ struct SchedulerFixture
     bcos::crypto::CryptoSuite::Ptr suite;
     bcostars::protocol::BlockFactoryImpl::Ptr blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory;
+    std::shared_ptr<MockRPC> mockRPC;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Scheduler, SchedulerFixture)
@@ -167,28 +172,13 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
         for (size_t j = 0; j < 8; ++j)
         {
             auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-                h256(i * j), "contract" + boost::lexical_cast<std::string>(j));
-
-            metaTx->setSubmitCallback(
-                [&latch](Error::Ptr error, protocol::TransactionSubmitResult::Ptr result) {
-                    SCHEDULER_LOG(TRACE) << "Submit callback execute";
-
-                    BOOST_CHECK(!error);
-                    BOOST_CHECK_EQUAL(result->status(), 0);
-                    BOOST_CHECK_NE(result->blockHash(), h256(0));
-                    BOOST_CHECK(result->transactionReceipt());
-                    BOOST_CHECK_LT(result->transactionIndex(), 1000 * 8);
-
-                    auto receipt = result->transactionReceipt();
-                    auto output = receipt->output();
-                    std::string_view outputStr((char*)output.data(), output.size());
-                    BOOST_CHECK_EQUAL(outputStr, "Hello world!");
-
-                    latch.count_down();
-                });
+                h256((i + 1) * (j + 1)), "contract" + boost::lexical_cast<std::string>(j));
+            metaTx->setSource("i am a source!");
             block->appendTransactionMetaData(std::move(metaTx));
         }
     }
+
+    mockRPC->latch = &latch;
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
 

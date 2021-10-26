@@ -56,10 +56,10 @@ void BlockExecutive::asyncExecute(
 
             m_executiveStates.emplace_back(i, std::move(message));
 
-            if (metaData->submitCallback())
+            if (!metaData->source().empty())
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
-                m_executiveResults[i].submitCallback = metaData->submitCallback();
+                m_executiveResults[i].source = metaData->source();
             }
         }
     }
@@ -322,14 +322,14 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
         });
 }
 
-void BlockExecutive::asyncNotify()
+void BlockExecutive::asyncNotify(bcos::rpc::RPCInterface& rpc)
 {
     auto blockHash = m_block->blockHeaderConst()->hash();
 
     size_t index = 0;
     for (auto& it : m_executiveResults)
     {
-        if (it.submitCallback)
+        if (!it.source.empty())
         {
             auto submitResult = m_transactionSubmitResultFactory->createTxSubmitResult();
             submitResult->setTransactionIndex(index++);
@@ -338,10 +338,7 @@ void BlockExecutive::asyncNotify()
             submitResult->setStatus(it.receipt->status());
             submitResult->setTransactionReceipt(it.receipt);
 
-            if (it.submitCallback)
-            {
-                it.submitCallback(nullptr, submitResult);
-            }
+            rpc.asyncNotifyTransactionResult("", it.transactionHash, std::move(submitResult));
         }
     }
 }
