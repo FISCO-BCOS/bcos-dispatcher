@@ -268,11 +268,11 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
     auto requests = std::map<std::string, DAGRequest, std::less<>>();
 
-    for (auto& it : m_executiveStates)
+    for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
     {
-        if (it.enableDAG)
+        if (it->enableDAG)
         {
-            auto& message = it.message;
+            auto& message = it->message;
             auto dagIt = requests.lower_bound(message->to());
             if (dagIt == requests.end() || dagIt->first != message->to())
             {
@@ -290,14 +290,20 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
     struct Status
     {
+        Status(size_t _total, decltype(callback) _callback, decltype(requests) _requests)
+          : latch(boost::latch(_total)),
+            callback(std::move(_callback)),
+            requests(std::move(_requests))
+        {}
+
         boost::latch latch;
         std::atomic_size_t failed = 0;
         decltype(callback) callback;
         decltype(requests) requests;
     };
     size_t total = requests.size();
-    auto status =
-        std::make_shared<Status>(boost::latch(total), 0, std::move(callback), std::move(requests));
+    auto status = std::make_shared<Status>(total, std::move(callback), std::move(requests));
+
     for (auto& it : status->requests)
     {
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it.second.to);
