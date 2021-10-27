@@ -19,7 +19,11 @@ using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
 void BlockExecutive::asyncExecute(
+<<<<<<< HEAD
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
+=======
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback) noexcept
+>>>>>>> upstream/dev
 {
     if (m_result)
     {
@@ -211,7 +215,11 @@ void BlockExecutive::asyncExecute(
     }
 }
 
+<<<<<<< HEAD
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
+=======
+void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback) noexcept
+>>>>>>> upstream/dev
 {
     auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
@@ -767,8 +775,13 @@ void BlockExecutive::checkBatch(BatchStatus& status)
             }
 
             SCHEDULER_LOG(TRACE) << "Batch run success"
+<<<<<<< HEAD
                                  << " total: " << errorCount + successCount
                                  << " success: " << successCount << " error: " << errorCount;
+=======
+                                << " total: " << errorCount + successCount
+                                << " success: " << successCount << " error: " << errorCount;
+>>>>>>> upstream/dev
 
             if (errorCount > 0)
             {
