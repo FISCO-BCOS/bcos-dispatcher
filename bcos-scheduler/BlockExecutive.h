@@ -65,6 +65,7 @@ public:
     bool isCall() { return m_staticCall; }
 
 private:
+    void DAGExecute(std::function<void(Error::UniquePtr)> error);
     void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
 
     struct CommitStatus
@@ -109,6 +110,7 @@ private:
         bcos::Error::UniquePtr error;
         int64_t currentSeq = 0;
         std::set<std::tuple<std::string, std::string>> keyLocks;
+        bool enableDAG = false;
     };
     std::list<ExecutiveState> m_executiveStates;
 
