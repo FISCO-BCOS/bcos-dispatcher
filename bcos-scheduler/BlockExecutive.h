@@ -65,6 +65,8 @@ public:
     bool isCall() { return m_staticCall; }
 
 private:
+    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+
     struct CommitStatus
     {
         std::atomic_size_t total;
