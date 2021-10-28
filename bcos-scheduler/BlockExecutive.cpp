@@ -259,88 +259,71 @@ void BlockExecutive::asyncNotify(
 
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 {
-    struct DAGRequest
-    {
-        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages;
-        std::vector<decltype(m_executiveStates)::iterator> iterators;
-        std::string_view to;
-    };
-
-    auto requests = std::map<std::string, DAGRequest, std::less<>>();
+    std::multimap<std::string_view, decltype(m_executiveStates)::iterator> requests;
 
     for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
     {
         if (it->enableDAG)
         {
-            auto& message = it->message;
-            auto dagIt = requests.lower_bound(message->to());
-            if (dagIt == requests.end() || dagIt->first != message->to())
-            {
-                dagIt = requests.emplace_hint(dagIt, DAGRequest());
-            }
-
-            dagIt->second.messages.emplace_back(std::move(message));
-            dagIt->second.iterators.emplace_back(it);
-            if (dagIt->second.to.empty())
-            {
-                dagIt->second.to = message->to();
-            }
+            requests.emplace(it->message->to(), it);
         }
     }
 
-    struct Status
-    {
-        Status(size_t _total, decltype(callback) _callback, decltype(requests) _requests)
-          : latch(boost::latch(_total)),
-            callback(std::move(_callback)),
-            requests(std::move(_requests))
-        {}
-
-        boost::latch latch;
-        std::atomic_size_t failed = 0;
-        decltype(callback) callback;
-        decltype(requests) requests;
-    };
     size_t total = requests.size();
-    auto status = std::make_shared<Status>(total, std::move(callback), std::move(requests));
+    auto latch = std::make_shared<boost::latch>(total);
+    auto failed = std::make_shared<std::atomic_size_t>();
+    auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
 
-    for (auto& it : status->requests)
+    for (auto& it : requests)
     {
-        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it.second.to);
-        executor->dagExecuteTransactions(it.second.messages,
-            [status, requestIt = it](bcos::Error::UniquePtr error,
-                std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages) {
-                status->latch.count_down();
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it.first);
+        auto count = requests.count(it.first);
+        auto range = requests.equal_range(it.first);
+
+        auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>(count);
+        auto iterators =
+            std::make_shared<std::vector<decltype(m_executiveStates)::iterator>>(count);
+        size_t i = 0;
+        while (range.first++ != range.second)
+        {
+            (*messages)[i] = std::move(range.first->second->message);
+            (*iterators)[i++] = range.first->second;
+        }
+
+        executor->dagExecuteTransactions(*messages,
+            [messages, iterators, latch, failed, callbackPtr](bcos::Error::UniquePtr error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
+                latch->count_down();
 
                 if (error)
                 {
-                    ++status->failed;
+                    ++(*failed);
                     SCHEDULER_LOG(ERROR)
                         << "DAG execute error: " << boost::diagnostic_information(*error);
                 }
-                else if (messages.size() != requestIt.second.messages.size())
+                else if (messages->size() != responseMessages.size())
                 {
-                    ++status->failed;
+                    ++(*failed);
                     SCHEDULER_LOG(ERROR) << "DAG messages mismatch!";
                 }
                 else
                 {
-                    for (size_t i = 0; i < messages.size(); ++i)
+                    for (size_t i = 0; i < responseMessages.size(); ++i)
                     {
-                        requestIt.second.iterators[i]->message = std::move(messages[i]);
+                        (*iterators)[i]->message = std::move(responseMessages[i]);
                     }
                 }
 
-                if (status->latch.try_wait())
+                if (latch->try_wait())
                 {
-                    if (status->failed > 0)
+                    if (*failed > 0)
                     {
-                        status->callback(BCOS_ERROR_UNIQUE_PTR(
+                        (*callbackPtr)(BCOS_ERROR_UNIQUE_PTR(
                             SchedulerError::DAGError, "Execute dag with errors"));
                         return;
                     }
 
-                    status->callback(nullptr);
+                    (*callbackPtr)(nullptr);
                 }
             });
     }
