@@ -15,6 +15,7 @@
 #include <chrono>
 #include <iterator>
 #include <thread>
+#include <utility>
 
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
@@ -30,6 +31,7 @@ void BlockExecutive::asyncExecute(
 
     m_currentTimePoint = std::chrono::system_clock::now();
 
+    bool withDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
@@ -55,12 +57,18 @@ void BlockExecutive::asyncExecute(
             message->setGasAvailable(TRANSACTION_GAS);
             message->setStaticCall(false);
 
-            m_executiveStates.emplace_back(i, std::move(message));
+            auto& executive = m_executiveStates.emplace_back(i, std::move(message));
 
             if (!metaData->source().empty())
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
                 m_executiveResults[i].source = metaData->source();
+            }
+
+            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
+            {
+                executive.enableDAG = true;
+                withDAG = true;
             }
         }
     }
@@ -97,17 +105,21 @@ void BlockExecutive::asyncExecute(
             message->setStaticCall(m_staticCall);
 
             m_executiveStates.emplace_back(i, std::move(message));
+
+            if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
+            {
+                SCHEDULER_LOG(ERROR) << "Execute transactions with dag!";
+                callback(BCOS_ERROR_UNIQUE_PTR(
+                             SchedulerError::UnknownError, "Execute transactions with dag!"),
+                    nullptr);
+            }
         }
     }
 
-    if (m_staticCall)
-    {
-        DMTExecute(std::move(callback));
-    }
-    else
+    if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, callback = std::move(callback)](Error::UniquePtr error) {
+        batchNextBlock([this, withDAG, callback = std::move(callback)](Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -118,8 +130,31 @@ void BlockExecutive::asyncExecute(
                 return;
             }
 
-            DMTExecute(std::move(callback));
+            if (withDAG)
+            {
+                DAGExecute([this, callback = std::move(callback)](Error::UniquePtr error) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << "DAG execute block with error!"
+                                             << boost::diagnostic_information(*error);
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                     SchedulerError::DAGError, "DAG execute error!", *error),
+                            nullptr);
+                        return;
+                    }
+
+                    DMTExecute(std::move(callback));
+                });
+            }
+            else
+            {
+                DMTExecute(std::move(callback));
+            }
         });
+    }
+    else
+    {
+        DMTExecute(std::move(callback));
     }
 }
 
@@ -269,16 +304,23 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         }
     }
 
+    if (requests.empty())
+    {
+        callback(nullptr);
+    }
+
     size_t total = requests.size();
     auto latch = std::make_shared<boost::latch>(total);
     auto failed = std::make_shared<std::atomic_size_t>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
 
-    for (auto& it : requests)
+    for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
     {
-        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it.first);
-        auto count = requests.count(it.first);
-        auto range = requests.equal_range(it.first);
+        SCHEDULER_LOG(TRACE) << "DAG contract: " << it->first;
+
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->first);
+        auto count = requests.count(it->first);
+        auto range = requests.equal_range(it->first);
 
         auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>(count);
         auto iterators =
@@ -286,9 +328,12 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         size_t i = 0;
         while (range.first++ != range.second)
         {
+            SCHEDULER_LOG(TRACE) << "message: " << range.first->second->message.get()
+                                 << " to: " << it->first;
             (*messages)[i] = std::move(range.first->second->message);
             (*iterators)[i++] = range.first->second;
         }
+        SCHEDULER_LOG(TRACE) << "Total: " << i << " messages";
 
         executor->dagExecuteTransactions(*messages,
             [messages, iterators, latch, failed, callbackPtr](bcos::Error::UniquePtr error,

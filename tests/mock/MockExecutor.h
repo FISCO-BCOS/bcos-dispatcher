@@ -50,7 +50,30 @@ public:
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
-    {}
+    {
+        BOOST_CHECK_EQUAL(inputs.size(), 100);
+
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages(inputs.size());
+        for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+        {
+            SCHEDULER_LOG(TRACE) << "Executing: " << inputs[i].get();
+            BOOST_CHECK_EQUAL(inputs[i]->type(), protocol::ExecutionMessage::TXHASH);
+            messages[i] = std::move(inputs[i]);
+            if (i < 50)
+            {
+                messages[i]->setType(protocol::ExecutionMessage::SEND_BACK);
+            }
+            else
+            {
+                messages[i]->setType(protocol::ExecutionMessage::FINISHED);
+
+                std::string result = "OK!";
+                messages[i]->setData(bcos::bytes(result.begin(), result.end()));
+            }
+        }
+
+        callback(nullptr, std::move(messages));
+    }
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
