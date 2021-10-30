@@ -343,24 +343,24 @@ BOOST_AUTO_TEST_CASE(dag)
     for (size_t i = 0; i < 1000; ++i)
     {
         auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-            h256(i), "contract" + boost::lexical_cast<std::string>(i % 10));
+            h256(i + 1), "contract" + boost::lexical_cast<std::string>((i + 1) % 10));
         metaTx->setAttribute(metaTx->attribute() | bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransactionMetaData(std::move(metaTx));
     }
 
-    // std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-    // scheduler->executeBlock(
-    //     block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
-    //         BOOST_CHECK(!error);
-    //         BOOST_CHECK(header);
+    std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
+    scheduler->executeBlock(
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(header);
 
-    //         executedHeader.set_value(std::move(header));
-    //     });
+            executedHeader.set_value(std::move(header));
+        });
 
-    // auto header = executedHeader.get_future().get();
+    auto header = executedHeader.get_future().get();
 
-    // BOOST_CHECK(header);
-    // BOOST_CHECK_NE(header->stateRoot(), h256());
+    BOOST_CHECK(header);
+    BOOST_CHECK_NE(header->stateRoot(), h256());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

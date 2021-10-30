@@ -294,7 +294,7 @@ void BlockExecutive::asyncNotify(
 
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 {
-    std::multimap<std::string_view, decltype(m_executiveStates)::iterator> requests;
+    std::multimap<std::string, decltype(m_executiveStates)::iterator> requests;
 
     for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
     {
@@ -309,9 +309,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         callback(nullptr);
     }
 
-    size_t total = requests.size();
-    auto latch = std::make_shared<boost::latch>(total);
-    auto failed = std::make_shared<std::atomic_size_t>();
+    auto totalCount = std::make_shared<std::atomic_size_t>(requests.size());
+    auto failed = std::make_shared<std::atomic_size_t>(0);
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
 
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
@@ -326,19 +325,21 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         auto iterators =
             std::make_shared<std::vector<decltype(m_executiveStates)::iterator>>(count);
         size_t i = 0;
-        while (range.first++ != range.second)
+        for (auto messageIt = range.first; messageIt != range.second; ++messageIt)
         {
-            SCHEDULER_LOG(TRACE) << "message: " << range.first->second->message.get()
-                                 << " to: " << it->first;
-            (*messages)[i] = std::move(range.first->second->message);
-            (*iterators)[i++] = range.first->second;
+            SCHEDULER_LOG(TRACE) << "message: " << messageIt->second->message.get()
+                                 << " to: " << messageIt->first;
+            messageIt->second->callStack.push(messageIt->second->currentSeq++);
+            messages->at(i) = std::move(messageIt->second->message);
+            iterators->at(i) = messageIt->second;
+
+            ++i;
         }
-        SCHEDULER_LOG(TRACE) << "Total: " << i << " messages";
 
         executor->dagExecuteTransactions(*messages,
-            [messages, iterators, latch, failed, callbackPtr](bcos::Error::UniquePtr error,
+            [messages, iterators, totalCount, failed, callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
-                latch->count_down();
+                *totalCount -= responseMessages.size();
 
                 if (error)
                 {
@@ -359,7 +360,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     }
                 }
 
-                if (latch->try_wait())
+                if (*totalCount == 0)
                 {
                     if (*failed > 0)
                     {
