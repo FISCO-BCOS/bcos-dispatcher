@@ -49,7 +49,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 ++it;
             }
 
-            callback(nullptr, bcos::protocol::BlockHeader::Ptr(it->result()));
+            SCHEDULER_LOG(TRACE) << "BlockHeader stateRoot: " << std::hex
+                                 << it->result()->stateRoot();
+            callback(nullptr, it->result());
             return;
         }
 
@@ -72,9 +74,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::move(block), this, 0, m_transactionSubmitResultFactory, false, verify);
 
     auto executeLockPtr = std::make_shared<decltype(executeLock)>(std::move(executeLock));
-    m_blocks.back().asyncExecute([callback = std::move(callback), executeLock =
-                                                                      std::move(executeLockPtr)](
-                                     Error::UniquePtr&& error, protocol::BlockHeader::Ptr header) {
+    auto& blockExecutive = m_blocks.back();
+    blockExecutive.asyncExecute([callback = std::move(callback), executeLock =
+                                                                     std::move(executeLockPtr)](
+                                    Error::UniquePtr&& error, protocol::BlockHeader::Ptr header) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
