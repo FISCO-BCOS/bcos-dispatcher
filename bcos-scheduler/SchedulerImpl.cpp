@@ -51,6 +51,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             SCHEDULER_LOG(TRACE) << "BlockHeader stateRoot: " << std::hex
                                  << it->result()->stateRoot();
+
+            blocksLock.unlock();
+            executeLock.unlock();
             callback(nullptr, it->result());
             return;
         }
@@ -63,6 +66,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 " current last number: " + boost::lexical_cast<std::string>(backBlock.number());
             SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
 
+            blocksLock.unlock();
+            executeLock.unlock();
             callback(
                 BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)), nullptr);
 
@@ -75,12 +80,16 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
     auto executeLockPtr = std::make_shared<decltype(executeLock)>(std::move(executeLock));
     auto& blockExecutive = m_blocks.back();
+
+    blocksLock.unlock();
     blockExecutive.asyncExecute([callback = std::move(callback), executeLock =
                                                                      std::move(executeLockPtr)](
-                                    Error::UniquePtr&& error, protocol::BlockHeader::Ptr header) {
+                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
+
+            executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
                 nullptr);
@@ -123,6 +132,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     {
         auto message = "Block is executing";
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+
+        commitLock.unlock();
+        blocksLock.unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
     }
@@ -132,6 +144,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         auto message = "Invalid block number, available block number: " +
                        boost::lexical_cast<std::string>(frontBlock.number());
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+
+        commitLock.unlock();
+        blocksLock.unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
@@ -146,46 +161,69 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
+
+            commitLock->unlock();
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                         SchedulerError::UnknownError, "Unknown error", *error),
+                         SchedulerError::UnknownError, "CommitBlock error", *error),
                 nullptr);
             return;
         }
 
-        asyncGetLedgerConfig([this, callback = std::move(callback)](
+        asyncGetLedgerConfig([this, commitLock = std::move(commitLock),
+                                 callback = std::move(callback)](
                                  Error::Ptr&& error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
                     << "Get system config error, " << boost::diagnostic_information(*error);
+
+                commitLock->unlock();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::UnknownError, "Get system config error", *error),
                     nullptr);
                 return;
             }
 
-            SCHEDULER_LOG(INFO) << "Commit block success"
+            SCHEDULER_LOG(INFO) << "CommitBlock success"
                                 << LOG_KV("block number", ledgerConfig->blockNumber());
 
             auto& executive = m_blocks.front();
             auto blockNumber = ledgerConfig->blockNumber();
+
             if (m_txNotifier)
             {
-                executive.asyncNotify(
-                    m_txNotifier, [this, blockNumber, callback, ledgerConfig](Error::Ptr _error) {
+                executive.asyncNotify(m_txNotifier,
+                    [this, blockNumber, callback = std::move(callback),
+                        ledgerConfig = std::move(ledgerConfig),
+                        commitLock = std::move(commitLock)](Error::Ptr _error) mutable {
                         if (m_blockNumberReceiver)
                         {
                             m_blockNumberReceiver(blockNumber);
                         }
+
+                        {
+                            std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                            m_blocks.pop_front();
+                            SCHEDULER_LOG(DEBUG)
+                                << "Remove committed block: " << blockNumber << " success";
+                        }
+
+                        commitLock->unlock();
                         // Note: only after the block notify finished can call the callback
-                        callback(std::move(_error),
-                            std::const_pointer_cast<bcos::ledger::LedgerConfig>(ledgerConfig));
+                        callback(std::move(_error), std::move(ledgerConfig));
                     });
             }
+            else
+            {
+                {
+                    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                    m_blocks.pop_front();
+                    SCHEDULER_LOG(DEBUG) << "Remove committed block: " << blockNumber << " success";
+                }
 
-            std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-            m_blocks.pop_front();
-            SCHEDULER_LOG(DEBUG) << "Remove committed block: " << blockNumber << " success";
+                commitLock->unlock();
+                callback(nullptr, std::move(ledgerConfig));
+            }
         });
     });
 }

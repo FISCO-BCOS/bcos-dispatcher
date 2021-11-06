@@ -192,14 +192,13 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
 
-    // latch = std::make_unique<boost::latch>(8 * 1000);
-    for (size_t i = 0; i < 1000; ++i)
+    for (size_t i = 0; i < 100; ++i)
     {
         for (size_t j = 0; j < 8; ++j)
         {
             auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
                 h256((i + 1) * (j + 1)), "contract" + boost::lexical_cast<std::string>(j));
-            metaTx->setSource("i am a source!");
+            // metaTx->setSource("i am a source!");
             block->appendTransactionMetaData(std::move(metaTx));
         }
     }
@@ -240,8 +239,6 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     commitPromise.get_future().get();
 
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
-
-    // latch->wait();
 }
 
 BOOST_AUTO_TEST_CASE(keyLocks)
