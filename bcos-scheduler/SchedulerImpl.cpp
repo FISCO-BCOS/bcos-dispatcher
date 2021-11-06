@@ -117,8 +117,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         return;
     }
 
-    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-
     if (m_blocks.empty())
     {
         auto message = "No uncommitted block";
@@ -134,7 +132,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
         commitLock.unlock();
-        blocksLock.unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
     }
@@ -146,7 +143,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
         commitLock.unlock();
-        blocksLock.unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
@@ -154,7 +150,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto commitLockPtr = std::make_shared<decltype(commitLock)>(
         std::move(commitLock));  // std::function need copyable
 
-    blocksLock.unlock();
     frontBlock.block()->setBlockHeader(std::move(header));
     frontBlock.asyncCommit([this, callback = std::move(callback), block = frontBlock.block(),
                                commitLock = std::move(commitLockPtr)](Error::UniquePtr&& error) {
