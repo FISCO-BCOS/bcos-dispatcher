@@ -318,7 +318,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(7, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(6, 0, 0);
 
     auto collecter = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
@@ -358,9 +358,6 @@ void SchedulerImpl::asyncGetLedgerConfig(
                                 boost::lexical_cast<uint64_t>(value));
                             break;
                         case 1:
-                            ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(value));
-                            break;
-                        case 2:
                             ledgerConfig->setLeaderSwitchPeriod(
                                 boost::lexical_cast<uint64_t>(value));
                             break;
@@ -408,13 +405,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
         [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
             collecter(std::move(error), std::tuple{0, std::move(config)});
         });
-    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_TIMEOUT,
-        [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collecter(std::move(error), std::tuple{1, std::move(config)});
-        });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
         [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collecter(std::move(error), std::tuple{2, std::move(config)});
+            collecter(std::move(error), std::tuple{1, std::move(config)});
         });
     m_ledger->asyncGetBlockNumber(
         [collecter, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
