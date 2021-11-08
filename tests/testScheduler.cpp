@@ -57,6 +57,7 @@ struct SchedulerFixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
         executionMessageFactory = std::make_shared<bcos::executor::NativeExecutionMessageFactory>();
 
+        blockHeaderFactory = std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite);
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
 
