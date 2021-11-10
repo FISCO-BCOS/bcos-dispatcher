@@ -34,6 +34,9 @@ void BlockExecutive::asyncExecute(
     bool withDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
+
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
         {
@@ -74,6 +77,9 @@ void BlockExecutive::asyncExecute(
     }
     else if (m_block->transactionsSize() > 0)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                             << LOG_KV("tx count", m_block->transactionsSize());
+
         m_executiveResults.resize(m_block->transactionsSize());
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
@@ -85,12 +91,8 @@ void BlockExecutive::asyncExecute(
             message->setType(protocol::ExecutionMessage::MESSAGE);
             message->setContextID(i + m_startContextID);
 
-            std::string sender;
-            sender.reserve(tx->sender().size() * 2);
-            boost::algorithm::hex_lower(tx->sender(), std::back_insert_iterator(sender));
-
-            message->setOrigin(sender);
-            message->setFrom(std::move(sender));
+            message->setOrigin(toHex(tx->sender()));
+            message->setFrom(std::string(message->origin()));
 
             if (tx->to().empty())
             {
@@ -110,10 +112,12 @@ void BlockExecutive::asyncExecute(
 
             if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
             {
+                // TODO: Executor must support dag execute
                 SCHEDULER_LOG(ERROR) << "Execute transactions with dag!";
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              SchedulerError::UnknownError, "Execute transactions with dag!"),
                     nullptr);
+                return;
             }
         }
     }
@@ -413,8 +417,9 @@ void BlockExecutive::DMTExecute(
                                  Error::UniquePtr error) {
             if (error)
             {
-                callback(
-                    BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Execute with errors", *error), nullptr);
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                             SchedulerError::DMTError, "Execute with errors", *error),
+                    nullptr);
                 return;
             }
 
@@ -429,8 +434,8 @@ void BlockExecutive::DMTExecute(
             {
                 SCHEDULER_LOG(TRACE) << "Empty states, end";
                 auto now = std::chrono::system_clock::now();
-                m_executeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now() - m_currentTimePoint);
+                m_executeElapsed =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
                 m_currentTimePoint = now;
 
                 if (m_staticCall)
@@ -446,7 +451,7 @@ void BlockExecutive::DMTExecute(
                 {
                     // All Transaction finished, get hash
                     batchGetHashes([this, callback = std::move(callback)](
-                                       Error::UniquePtr&& error, crypto::HashType hash) {
+                                       Error::UniquePtr error, crypto::HashType hash) {
                         if (error)
                         {
                             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -764,8 +769,10 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 continue;
             }
             m_calledContract.emplace_hint(contractIt, it->message->to());
-            SCHEDULER_LOG(TRACE) << "Executing: " << std::hex << it->message->transactionHash()
-                                 << " " << it->message->to();
+            SCHEDULER_LOG(TRACE) << "Executing, "
+                                 << " context id: " << it->message->contextID()
+                                 << "seq: " << it->message->seq() << " txHash: " << std::hex
+                                 << it->message->transactionHash() << " to: " << it->message->to();
 
             auto seq = it->currentSeq++;
 
@@ -849,7 +856,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                     << "Execute transaction error: " << boost::diagnostic_information(*error);
 
                 it->error = std::move(error);
-                m_executiveStates.erase(it);
+                // m_executiveStates.erase(it); // No need to erase error state
             }
             else
             {
@@ -910,7 +917,8 @@ void BlockExecutive::checkBatch(BatchStatus& status)
 
             if (errorCount > 0)
             {
-                status.callback(BCOS_ERROR_UNIQUE_PTR(-1, "Batch with errors"));
+                status.callback(
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"));
                 return;
             }
 
