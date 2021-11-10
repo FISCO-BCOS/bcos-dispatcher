@@ -725,6 +725,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             break;
         }
 
+        if (it->error)
+        {
+            batchStatus->allSended = true;
+            ++batchStatus->error;
+
+            SCHEDULER_LOG(TRACE) << "Detected error!";
+            break;
+        }
+
         // When to() is empty, create contract
         if (it->message->to().empty())
         {
@@ -770,8 +779,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             }
             m_calledContract.emplace_hint(contractIt, it->message->to());
             SCHEDULER_LOG(TRACE) << "Executing, "
-                                 << " context id: " << it->message->contextID()
-                                 << "seq: " << it->message->seq() << " txHash: " << std::hex
+                                 << "context id: " << it->message->contextID()
+                                 << " seq: " << it->message->seq() << " txHash: " << std::hex
                                  << it->message->transactionHash() << " to: " << it->message->to();
 
             auto seq = it->currentSeq++;
@@ -810,7 +819,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 SCHEDULER_LOG(TRACE) << "Eraseing: " << std::hex << it->message->transactionHash()
                                      << " " << it->message->to();
 
-                it = m_executiveStates.erase(it);  // FIXME: bug jump to next it
+                it = m_executiveStates.erase(it);
                 deleted = true;
                 continue;
             }
@@ -856,7 +865,11 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                     << "Execute transaction error: " << boost::diagnostic_information(*error);
 
                 it->error = std::move(error);
-                // m_executiveStates.erase(it); // No need to erase error state
+                it->message.reset();
+                // m_executiveStates.erase(it);  // Remove the error state
+
+                // Set error to batch
+                ++batchStatus->error;
             }
             else
             {
@@ -884,6 +897,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 
 void BlockExecutive::checkBatch(BatchStatus& status)
 {
+    SCHEDULER_LOG(TRACE) << "status: " << status.allSended << " " << status.received << " "
+                         << status.total;
     if (status.allSended && status.received == status.total)
     {
         bool expect = false;
@@ -893,29 +908,12 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                                  << status.received << " " << std::this_thread::get_id() << " "
                                  << status.callbackExecuted;
 
-            size_t errorCount = 0;
-            size_t successCount = 0;
+            SCHEDULER_LOG(TRACE) << "Batch run finished"
+                                 << " total: " << status.allSended
+                                 << " success: " << status.allSended - status.error
+                                 << " error: " << status.error;
 
-            for (auto& it : m_executiveStates)
-            {
-                if (it.error)
-                {
-                    // with errors
-                    ++errorCount;
-                    SCHEDULER_LOG(ERROR)
-                        << "Batch with error: " << boost::diagnostic_information(*it.error);
-                }
-                else
-                {
-                    ++successCount;
-                }
-            }
-
-            SCHEDULER_LOG(TRACE) << "Batch run success"
-                                 << " total: " << errorCount + successCount
-                                 << " success: " << successCount << " error: " << errorCount;
-
-            if (errorCount > 0)
+            if (status.error > 0)
             {
                 status.callback(
                     BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"));

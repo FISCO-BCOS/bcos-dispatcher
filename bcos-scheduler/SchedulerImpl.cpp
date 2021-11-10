@@ -236,6 +236,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     SCHEDULER_LOG(DEBUG) << "Remove committed block: " << blockNumber << " success";
                 }
 
+                setLastCommitedBlockNumber(blockNumber);
+
                 commitLock->unlock();
                 callback(nullptr, std::move(ledgerConfig));
             }
