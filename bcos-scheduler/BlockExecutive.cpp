@@ -70,7 +70,6 @@ void BlockExecutive::asyncExecute(
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
             {
-                SCHEDULER_LOG(DEBUG) << "Execute with dag by metadata";
                 executive.enableDAG = true;
                 withDAG = true;
             }
@@ -113,7 +112,6 @@ void BlockExecutive::asyncExecute(
 
             if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
             {
-                SCHEDULER_LOG(DEBUG) << "Execute with dag by transaction";
                 executive.enableDAG = true;
                 withDAG = true;
             }
