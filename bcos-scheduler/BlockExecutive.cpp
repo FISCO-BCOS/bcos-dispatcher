@@ -9,6 +9,7 @@
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
 #include <atomic>
@@ -751,11 +752,22 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         {
             for (auto& keyLockIt : it->second.message->keyLocks())
             {
+                SCHEDULER_LOG(TRACE)
+                    << "Accquire lock before batch,type: " << it->second.message->type()
+                    << ", from: " << it->second.message->from() << ", key: " << toHex(keyLockIt)
+                    << ", contextID: " << it->second.contextID
+                    << ", seq: " << it->second.message->seq();
                 if (!m_keyLocks.acquireKeyLock(it->second.message->from(), keyLockIt,
                         it->second.contextID, it->second.message->seq()))
                 {
-                    batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(
-                        UnexpectedKeyLockError, "Unexpected key lock error!"));
+                    auto message =
+                        (boost::format("Accquire lock before batch failed, type: %d, from: "
+                                       "%s, key: %s, contextID: %ld, seq: %ld") %
+                            it->second.message->type() % it->second.message->from() %
+                            toHex(keyLockIt) % it->second.contextID % it->second.message->seq())
+                            .str();
+                    SCHEDULER_LOG(ERROR) << message;
+                    batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(UnexpectedKeyLockError, message));
                     return;
                 }
             }
@@ -835,7 +847,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             break;
         }
         // Retry type, send again
-        case protocol::ExecutionMessage::WAIT_KEY:
+        case protocol::ExecutionMessage::KEY_LOCK:
         {
             // Try acquire key lock
             if (!m_keyLocks.acquireKeyLock(it->second.message->to(),
@@ -860,6 +872,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         auto keyLocks =
             m_keyLocks.getKeyLocksByContract(it->second.message->to(), it->second.contextID);
         it->second.message->setKeyLocks(std::move(keyLocks));
+
+        for (auto& keyIt : it->second.message->keyLocks())
+        {
+            SCHEDULER_LOG(TRACE)
+                << boost::format(
+                       "Dispatch key lock type: %s, from: %s, key: %s, contextID: %ld, seq: %ld") %
+                       it->second.message->type() % it->second.message->from() % toHex(keyIt) %
+                       it->second.contextID % it->second.message->seq();
+        }
 
         ++batchStatus->total;
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->second.message->to());
