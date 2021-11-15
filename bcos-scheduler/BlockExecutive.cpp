@@ -236,7 +236,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             params.primaryTableName = SYS_CURRENT_STATE;
             params.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
             m_scheduler->m_storage->asyncPrepare(
-                params, stateStorage, [status, this](Error::Ptr&& error, uint64_t startTimeStamp) {
+                params, *stateStorage, [status, this](Error::Ptr&& error, uint64_t startTimeStamp) {
                     if (error)
                     {
                         ++status->failed;
@@ -774,7 +774,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 continue;
             }
             m_calledContract.emplace_hint(contractIt, it->message->to());
-            SCHEDULER_LOG(DEBUG) << "Executing, "
+            SCHEDULER_LOG(TRACE) << "Executing, "
                                  << "context id: " << it->message->contextID()
                                  << " seq: " << it->message->seq() << " txHash: " << std::hex
                                  << it->message->transactionHash() << " to: " << it->message->to();
