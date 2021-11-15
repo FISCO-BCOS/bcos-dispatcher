@@ -708,14 +708,14 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->callback = std::move(callback);
 
-    bool bypass = true;
+    bool pass = true;
     for (auto it = m_executiveStates.begin();;)
     {
-        if (!bypass)
+        if (!pass)
         {
             ++it;
         }
-        bypass = false;
+        pass = false;
 
         if (it == m_executiveStates.end())
         {
@@ -753,7 +753,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             for (auto& keyLockIt : it->second.message->keyLocks())
             {
                 SCHEDULER_LOG(TRACE)
-                    << "Accquire lock before batch,type: " << it->second.message->type()
+                    << "Accquire lock before batch, type: " << it->second.message->type()
                     << ", from: " << it->second.message->from() << ", key: " << toHex(keyLockIt)
                     << ", contextID: " << it->second.contextID
                     << ", seq: " << it->second.message->seq();
@@ -787,7 +787,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             {
                 // skip the same contract
                 it = m_executiveStates.upper_bound(it->second.message->to());
-                bypass = true;
+                pass = true;
 
                 continue;
             }
@@ -837,7 +837,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                     << it->second.message->to();
 
                 it = m_executiveStates.erase(it);
-                bypass = true;
+                pass = true;
                 continue;
             }
 
@@ -850,12 +850,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         case protocol::ExecutionMessage::KEY_LOCK:
         {
             // Try acquire key lock
-            if (!m_keyLocks.acquireKeyLock(it->second.message->to(),
+            if (!m_keyLocks.acquireKeyLock(it->second.message->from(),
                     it->second.message->keyLockAcquired(), it->second.message->contextID(),
                     it->second.message->seq()))
             {
                 continue;
             }
+
+            SCHEDULER_LOG(TRACE) << "Wait key lock success, from: " << it->second.message->from()
+                                 << " keyLockAcquired: " << it->second.message->keyLockAcquired();
 
             break;
         }

@@ -141,6 +141,7 @@ private:
     size_t m_gasUsed = 0;
 
     KeyLocks m_keyLocks;
+    std::mutex m_keyLocksMutex;
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 
