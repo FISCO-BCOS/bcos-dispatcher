@@ -39,7 +39,7 @@ bool KeyLocks::acquireKeyLock(
     {
         if (it->contextID != contextID)
         {
-            SCHEDULER_LOG(ERROR) << boost::format(
+            SCHEDULER_LOG(TRACE) << boost::format(
                                         "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
                                         "exists: [%ld, %ld]") %
                                         contract % key % contextID % seq % it->contextID % it->seq;
@@ -49,13 +49,12 @@ bool KeyLocks::acquireKeyLock(
         }
     }
 
-    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract
-                         << " key: " << toHex(key) << " contextID: " << contextID
-                         << " seq: " << seq;
+    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
+                         << " contextID: " << contextID << " seq: " << seq;
 
     // Current context owing the key, accquire it
-    [[maybe_unused]] auto [insertedIt, inserted] = m_keyLocks.get<1>().emplace(
-        KeyLockItem{std::string(contract), std::string(key), contextID, seq});
+    [[maybe_unused]] auto [insertedIt, inserted] =
+        m_keyLocks.emplace(KeyLockItem{std::string(contract), std::string(key), contextID, seq});
 
     return true;
 }
