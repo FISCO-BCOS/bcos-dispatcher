@@ -12,6 +12,7 @@
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
+#include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
 #include <iterator>
@@ -747,34 +748,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             }
         }
 
-        // If call with key locks, acquire it
-        if (!it->second.message->keyLocks().empty())
-        {
-            for (auto& keyLockIt : it->second.message->keyLocks())
-            {
-                SCHEDULER_LOG(TRACE)
-                    << "Accquire lock before batch, type: " << it->second.message->type()
-                    << ", from: " << it->second.message->from() << ", key: " << toHex(keyLockIt)
-                    << ", contextID: " << it->second.contextID
-                    << ", seq: " << it->second.message->seq();
-                if (!m_keyLocks.acquireKeyLock(it->second.message->from(), keyLockIt,
-                        it->second.contextID, it->second.message->seq()))
-                {
-                    auto message =
-                        (boost::format("Accquire lock before batch failed, type: %d, from: "
-                                       "%s, key: %s, contextID: %ld, seq: %ld") %
-                            it->second.message->type() % it->second.message->from() %
-                            toHex(keyLockIt) % it->second.contextID % it->second.message->seq())
-                            .str();
-                    SCHEDULER_LOG(ERROR) << message;
-                    batchStatus->callback(BCOS_ERROR_UNIQUE_PTR(UnexpectedKeyLockError, message));
-                    return;
-                }
-            }
-
-            it->second.message->setKeyLocks({});
-        }
-
         switch (it->second.message->type())
         {
         // Request type, push stack
@@ -791,6 +764,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 
                 continue;
             }
+
             m_calledContract.emplace_hint(contractIt, it->second.message->to());
             SCHEDULER_LOG(TRACE) << "Executing, "
                                  << "context id: " << it->second.message->contextID()
@@ -810,9 +784,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         case protocol::ExecutionMessage::FINISHED:
         case protocol::ExecutionMessage::REVERT:
         {
-            // Clear the context keyLocks
-            m_keyLocks.releaseKeyLocks(it->second.contextID, it->second.message->seq());
-
             it->second.callStack.pop();
 
             // Empty stack, execution is finished
@@ -854,11 +825,19 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                     it->second.message->keyLockAcquired(), it->second.message->contextID(),
                     it->second.message->seq()))
             {
+                SCHEDULER_LOG(TRACE)
+                    << "Waiting key, contract: " << it->second.message->from()
+                    << " keyLockAcquired: " << toHex(it->second.message->keyLockAcquired())
+                    << " context id: " << it->second.message->contextID()
+                    << " seq: " << it->second.message->seq();
                 continue;
             }
 
-            SCHEDULER_LOG(TRACE) << "Wait key lock success, from: " << it->second.message->from()
-                                 << " keyLockAcquired: " << it->second.message->keyLockAcquired();
+            SCHEDULER_LOG(TRACE) << "Wait key lock success, contract: "
+                                 << it->second.message->from() << " keyLockAcquired: "
+                                 << toHex(it->second.message->keyLockAcquired())
+                                 << " context id: " << it->second.message->contextID()
+                                 << " seq: " << it->second.message->seq();
 
             break;
         }
@@ -904,6 +883,30 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             }
             else
             {
+                // Process key locks
+                switch (response->type())
+                {
+                case protocol::ExecutionMessage::MESSAGE:
+                case protocol::ExecutionMessage::KEY_LOCK:
+                {
+                    std::unique_lock<std::mutex> lock(m_keyLocksMutex);
+                    m_keyLocks.batchAcquireKeyLock(response->from(), response->keyLocks(),
+                        response->contextID(), response->seq());
+                    break;
+                }
+                case bcos::protocol::ExecutionMessage::FINISHED:
+                case bcos::protocol::ExecutionMessage::REVERT:
+                {
+                    std::unique_lock<std::mutex> lock(m_keyLocksMutex);
+                    m_keyLocks.releaseKeyLocks(response->contextID(), response->seq());
+                    break;
+                }
+                default:
+                {
+                    // ignore SEND_BACK and TXHASH
+                    break;
+                }
+                }
                 it->second.message = std::move(response);
             }
 

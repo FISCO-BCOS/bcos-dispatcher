@@ -3,46 +3,66 @@
 #include <assert.h>
 #include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <bcos-framework/libutilities/Error.h>
+#include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos::scheduler;
 
-bool KeyLocks::acquireKeyLock(
-    const std::string_view& contract, const std::string_view& key, int64_t contextID, int64_t seq)
+bool KeyLocks::batchAcquireKeyLock(std::string_view contract, gsl::span<std::string const> keyLocks,
+    int64_t contextID, int64_t seq)
 {
-    SCHEDULER_LOG(TRACE) << "Acquire key lock, contract: " << contract << " key: " << toHex(key)
-                         << " contextID: " << contextID << " seq: " << seq;
+    if (!keyLocks.empty())
+    {
+        for (auto& it : keyLocks)
+        {
+            if (!acquireKeyLock(contract, it, contextID, seq))
+            {
+                auto message = (boost::format("Batch acquire lock failed, contract: %s"
+                                              ", key: %s, contextID: %ld, seq: %ld") %
+                                contract % toHex(it) % contextID % seq)
+                                   .str();
+                SCHEDULER_LOG(ERROR) << message;
+                BOOST_THROW_EXCEPTION(BCOS_ERROR(UnexpectedKeyLockError, message));
+                return false;
+            }
+        }
+    }
 
+    return true;
+}
+
+bool KeyLocks::acquireKeyLock(
+    std::string_view contract, std::string_view key, int64_t contextID, int64_t seq)
+{
     auto it = m_keyLocks.get<1>().find(std::tuple{contract, key});
     if (it != m_keyLocks.get<1>().end())
     {
         if (it->contextID != contextID)
         {
-            SCHEDULER_LOG(ERROR) << "Acquire key lock failed, request contextID: " << contextID
-                                 << " expected contextID: " << it->contextID;
+            SCHEDULER_LOG(ERROR) << boost::format(
+                                        "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
+                                        "exists: [%ld, %ld]") %
+                                        contract % key % contextID % seq % it->contextID % it->seq;
 
             // Another context is owing the key
             return false;
         }
     }
 
-    SCHEDULER_LOG(TRACE) << "Acquire key lock success";
+    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract
+                         << " key: " << toHex(key) << " contextID: " << contextID
+                         << " seq: " << seq;
 
     // Current context owing the key, accquire it
     [[maybe_unused]] auto [insertedIt, inserted] = m_keyLocks.get<1>().emplace(
         KeyLockItem{std::string(contract), std::string(key), contextID, seq});
 
-    if (!inserted)
-    {
-        SCHEDULER_LOG(ERROR) << "Insert key lock error!";
-        return false;
-    }
-
     return true;
 }
 
+
 std::vector<std::string> KeyLocks::getKeyLocksByContract(
-    const std::string_view& contract, int64_t excludeContextID) const
+    std::string_view contract, int64_t excludeContextID) const
 {
     std::vector<std::string> results;
     auto count = m_keyLocks.get<2>().count(contract);
