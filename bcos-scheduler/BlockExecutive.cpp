@@ -70,8 +70,9 @@ void BlockExecutive::asyncExecute(
                 withDAG = true;
             }
 
-            m_executiveStates.emplace(std::make_tuple(std::string(metaData->to()), i),
-                ExecutiveState(i, std::move(message), withDAG));
+            auto to = message->to();
+            m_executiveStates.emplace(
+                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
 
             if (metaData)
             {
@@ -709,6 +710,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
 void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 {
+    SCHEDULER_LOG(TRACE) << "Start batch";
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->callback = std::move(callback);
 
@@ -1016,6 +1018,8 @@ void BlockExecutive::traverseExecutive(std::function<TraverseHint(ExecutiveState
 
     for (auto it = m_executiveStates.begin(); it != m_executiveStates.end();)
     {
+        SCHEDULER_LOG(TRACE) << "Traverse " << std::get<0>(it->first) << " | "
+                             << std::get<1>(it->first);
         auto hint = callback(it->second);
         switch (hint)
         {
