@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(acquireKeyLock)
     BOOST_CHECK(keyLocks.acquireKeyLock(to, key, 1001, 0));
 }
 
-BOOST_AUTO_TEST_CASE(getKeyLocksByContract)
+BOOST_AUTO_TEST_CASE(getContractKeyLocksNotHoldingByContext)
 {
     std::string to = "contract1";
     std::string keyPrefix = "key";
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(getKeyLocksByContract)
         keyLocks.acquireKeyLock(to, keyPrefix + boost::lexical_cast<std::string>(i), 101, 20);
     }
 
-    auto keys = keyLocks.getKeyLocksByContract(to, 101);
+    auto keys = keyLocks.getContractKeyLocksNotHoldingByContext(to, 101);
 
     BOOST_CHECK_EQUAL(keys.size(), 100);
     for (size_t i = 0; i < 100; ++i)
