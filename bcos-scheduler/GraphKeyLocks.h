@@ -95,7 +95,7 @@ inline bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
 {
     if (lhs.index() != 1)
     {
-        return false;
+        return true;
     }
 
     auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(lhs))),
@@ -108,7 +108,7 @@ inline bool operator<(const std::tuple<std::string_view, std::string_view>& lhs,
 {
     if (rhs.index() != 1)
     {
-        return true;
+        return false;
     }
 
     auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(rhs))),

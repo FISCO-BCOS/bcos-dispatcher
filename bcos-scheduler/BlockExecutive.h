@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ExecutorManager.h"
-#include "KeyLocks.h"
+#include "GraphKeyLocks.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
@@ -170,7 +170,7 @@ private:
     std::set<std::string, std::less<>> m_calledContract;
     size_t m_gasUsed = 0;
 
-    KeyLocks m_keyLocks;
+    GraphKeyLocks m_keyLocks;
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 

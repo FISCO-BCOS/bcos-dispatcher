@@ -101,24 +101,24 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 {
     SCHEDULER_LOG(TRACE) << "Release key lock, contextID: " << contextID << " seq: " << seq;
     auto vertex = touchContext(contextID);
-    boost::remove_in_edge_if(
-        vertex,
-        [this, seq](EdgeID edge) {
-            auto edgeSeq = boost::get(EdgePropertyTag(), edge);
-            if (edgeSeq == seq)
+
+    auto range = boost::in_edges(vertex, m_graph);
+    for (auto it = range.first; it != range.second;)
+    {
+        ++it;
+        auto edgeSeq = boost::get(EdgePropertyTag(), *it);
+        if (edgeSeq == seq)
+        {
+            if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
             {
-                if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
-                {
-                    auto source = boost::get(VertexPropertyTag(), boost::source(edge, m_graph));
-                    const auto& [contract, key] = std::get<1>(*source);
-                    SCHEDULER_LOG(TRACE)
-                        << "Releasing key lock, contract: " << contract << " key: " << key;
-                }
-                return true;
+                auto source = boost::get(VertexPropertyTag(), boost::source(*it, m_graph));
+                const auto& [contract, key] = std::get<1>(*source);
+                SCHEDULER_LOG(TRACE)
+                    << "Releasing key lock, contract: " << contract << " key: " << key;
             }
-            return false;
-        },
-        m_graph);
+            boost::remove_edge(*it, m_graph);
+        }
+    }
 }
 
 bool GraphKeyLocks::detectDeadLock() const

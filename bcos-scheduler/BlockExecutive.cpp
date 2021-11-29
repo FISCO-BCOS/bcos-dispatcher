@@ -876,7 +876,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         }
 
         // Set current key lock into message
-        auto keyLocks = m_keyLocks.getContractKeyLocksNotHoldingByContext(message->to(), contextID);
+        auto keyLocks = m_keyLocks.getKeyLocksNotHoldingByContext(message->to(), contextID);
         message->setKeyLocks(std::move(keyLocks));
 
         if (c_fileLogLevel >= bcos::LogLevel::TRACE)

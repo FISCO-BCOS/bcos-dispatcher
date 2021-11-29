@@ -1,4 +1,4 @@
-#include "../bcos-scheduler/KeyLocks.h"
+#include "../bcos-scheduler/GraphKeyLocks.h"
 #include "libutilities/Common.h"
 #include "mock/MockExecutor.h"
 #include <boost/lexical_cast.hpp>
@@ -12,7 +12,7 @@ struct KeyLocksFixture
 {
     KeyLocksFixture() {}
 
-    scheduler::KeyLocks keyLocks;
+    scheduler::GraphKeyLocks keyLocks;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestKeyLocks, KeyLocksFixture)
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(getContractKeyLocksNotHoldingByContext)
         keyLocks.acquireKeyLock(to, keyPrefix + boost::lexical_cast<std::string>(i), 101, 20);
     }
 
-    auto keys = keyLocks.getContractKeyLocksNotHoldingByContext(to, 101);
+    auto keys = keyLocks.getKeyLocksNotHoldingByContext(to, 101);
 
     BOOST_CHECK_EQUAL(keys.size(), 100);
     for (size_t i = 0; i < 100; ++i)
