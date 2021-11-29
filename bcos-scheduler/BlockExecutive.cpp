@@ -766,19 +766,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         auto contextID = executiveState.contextID;
         auto seq = message->seq();
 
-        if (message->to().empty())
-        {
-            if (message->createSalt())
-            {
-                message->setTo(
-                    newEVMAddress(message->from(), message->data(), *(message->createSalt())));
-            }
-            else
-            {
-                message->setTo(newEVMAddress(number(), contextID, seq));
-            }
-        }
-
         switch (message->type())
         {
         // Request type, push stack
@@ -797,9 +784,21 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 
             m_calledContract.emplace_hint(contractIt, message->to());
 
-            auto seq = executiveState.currentSeq++;
-            executiveState.callStack.push(seq);
-            executiveState.message->setSeq(seq);
+            auto newSeq = executiveState.currentSeq++;
+            if (message->to().empty())
+            {
+                if (message->createSalt())
+                {
+                    message->setTo(
+                        newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+                }
+                else
+                {
+                    message->setTo(newEVMAddress(number(), contextID, newSeq));
+                }
+            }
+            executiveState.callStack.push(newSeq);
+            executiveState.message->setSeq(newSeq);
 
             SCHEDULER_LOG(TRACE) << "Execute, " << message->contextID() << " | " << message->seq()
                                  << " | " << std::hex << message->transactionHash() << " | "
