@@ -72,7 +72,17 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
-                    message->setTo(preprocessAddress(metaData->to()));
+                    if (m_scheduler->m_isAuthCheck &&
+                        metaData->attribute() & bcos::protocol::Transaction::Attribute::AUTH_CREATE)
+                    {
+                        // if enable auth check, and first deploy auth contract
+                        message->setCreate(true);
+                        message->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+                    }
+                    else
+                    {
+                        message->setTo(preprocessAddress(metaData->to()));
+                    }
                 }
             }
 
@@ -134,13 +144,17 @@ void BlockExecutive::asyncExecute(
                 }
                 else
                 {
-                    if (m_scheduler->m_isAuthCheck && m_block->blockHeaderConst()->number() == 0 &&
-                        tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+                    if (m_scheduler->m_isAuthCheck &&
+                        tx->attribute() & bcos::protocol::Transaction::Attribute::AUTH_CREATE)
                     {
                         // if enable auth check, and first deploy auth contract
                         message->setCreate(true);
+                        message->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
                     }
-                    message->setTo(preprocessAddress(tx->to()));
+                    else
+                    {
+                        message->setTo(preprocessAddress(tx->to()));
+                    }
                 }
             }
 
