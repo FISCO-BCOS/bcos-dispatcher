@@ -79,5 +79,40 @@ BOOST_AUTO_TEST_CASE(getKeyLocksNotHoldingByContext)
     BOOST_CHECK_EQUAL_COLLECTIONS(keys.begin(), keys.end(), matchKeys.begin(), matchKeys.end());
 }
 
+BOOST_AUTO_TEST_CASE(deadLock)
+{
+    std::string to = "contract1";
+    std::string key1 = "key1";
+    std::string key2 = "key2";
+
+    // No dead lock
+    BOOST_CHECK(keyLocks.acquireKeyLock(to, key1, 1000, 1));
+    BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 1));
+
+    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 2));
+    // BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
+
+    auto list = keyLocks.detectDeadLock();
+    for (auto& it : list)
+    {
+        BOOST_FAIL("Unexpected dead lock found");
+        auto [contextID, seq] = it;
+        std::cout << "Dead lock context: " << contextID << " seq: " << seq << std::endl;
+    }
+
+    // Add a dead lock
+    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
+    list = keyLocks.detectDeadLock();
+    size_t count = 0;
+    for (auto& it : list)
+    {
+        auto [contextID, seq] = it;
+        std::cout << "Dead lock context: " << contextID << " seq: " << seq << std::endl;
+        ++count;
+    }
+
+    BOOST_CHECK_EQUAL(count, 1);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

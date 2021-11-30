@@ -9,17 +9,18 @@
 #include <boost/graph/detail/adjacency_list.hpp>
 #include <boost/graph/edge_list.hpp>
 #include <boost/graph/graph_selectors.hpp>
+#include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos::scheduler;
 
-bool GraphKeyLocks::batchAcquireKeyLock(std::string_view contract,
-    gsl::span<std::string const> keyLocks, int64_t contextID, int64_t seq)
+bool GraphKeyLocks::batchAcquireKeyLock(
+    std::string_view contract, gsl::span<std::string const> keys, ContextID contextID, Seq seq)
 {
-    if (!keyLocks.empty())
+    if (!keys.empty())
     {
-        for (auto& it : keyLocks)
+        for (auto& it : keys)
         {
             if (!acquireKeyLock(contract, it, contextID, seq))
             {
@@ -40,7 +41,7 @@ bool GraphKeyLocks::batchAcquireKeyLock(std::string_view contract,
 bool GraphKeyLocks::acquireKeyLock(
     std::string_view contract, std::string_view key, int64_t contextID, int64_t seq)
 {
-    auto keyVertex = touchKey(contract, key);
+    auto keyVertex = touchKeyLock(std::make_tuple(contract, key));
     auto contextVertex = touchContext(contextID);
 
     auto range = boost::out_edges(keyVertex, m_graph);
@@ -121,9 +122,49 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     }
 }
 
-bool GraphKeyLocks::detectDeadLock() const
+std::forward_list<std::tuple<int64_t, int64_t>> GraphKeyLocks::detectDeadLock()
 {
-    return false;
+    struct GraphVisitor
+    {
+        GraphVisitor(std::forward_list<std::tuple<int64_t, int64_t>>& contextIDList)
+          : m_contextIDList(contextIDList)
+        {}
+
+        void initialize_vertex(VertexID, const Graph&) {}
+        void start_vertex(VertexID, const Graph&) {}
+        void discover_vertex(VertexID, const Graph&) {}
+        void examine_edge(EdgeID, const Graph&) {}
+        void tree_edge(EdgeID, const Graph&) {}
+        void forward_or_cross_edge(EdgeID, const Graph&) {}
+        void finish_edge(EdgeID, const Graph&) {}
+        void finish_vertex(VertexID, const Graph&) {}
+
+        void back_edge(EdgeID e, const Graph& g) const
+        {
+            auto seq = boost::get(EdgePropertyTag(), e);
+            auto sourceVertex = boost::get(VertexPropertyTag(), boost::source(e, g));
+            auto targetVertex = boost::get(VertexPropertyTag(), boost::target(e, g));
+
+            auto contextVertex = sourceVertex;
+            if (targetVertex->index() == 0)
+            {
+                contextVertex = targetVertex;
+            }
+
+            auto contextID = std::get<0>(*contextVertex);
+            m_contextIDList.emplace_front(contextID, seq);
+        }
+
+        std::forward_list<std::tuple<int64_t, int64_t>>& m_contextIDList;
+    };
+
+    std::forward_list<std::tuple<int64_t, int64_t>> contextIDList;
+    std::map<VertexID, boost::default_color_type> vertexColors;
+
+    boost::depth_first_search(
+        m_graph, GraphVisitor(contextIDList), boost::make_assoc_property_map(vertexColors));
+
+    return contextIDList;
 }
 
 GraphKeyLocks::VertexID GraphKeyLocks::touchContext(int64_t contextID)
@@ -138,17 +179,19 @@ GraphKeyLocks::VertexID GraphKeyLocks::touchContext(int64_t contextID)
     return contextVertexID;
 }
 
-GraphKeyLocks::VertexID GraphKeyLocks::touchKey(std::string_view contract, std::string_view key)
+GraphKeyLocks::VertexID GraphKeyLocks::touchKeyLock(KeyLockView keyLockView)
 {
-    auto contractKeyView = std::make_tuple(contract, key);
+    auto contractKeyView = keyLockView;
     auto it = m_vertexes.lower_bound(contractKeyView);
     if (it != m_vertexes.end() && it->first == contractKeyView)
     {
         return it->second;
     }
 
-    auto inserted = m_vertexes.emplace_hint(
-        it, Vertex(std::make_tuple(std::string(contract), std::string(key))), (VertexID)0);
+    auto inserted = m_vertexes.emplace_hint(it,
+        Vertex(std::make_tuple(
+            std::string(std::get<0>(contractKeyView)), std::string(std::get<1>(contractKeyView)))),
+        (VertexID)0);
     inserted->second = boost::add_vertex(&(inserted->first), m_graph);
     return inserted->second;
 }

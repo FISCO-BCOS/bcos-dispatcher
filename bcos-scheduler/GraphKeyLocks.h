@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common.h"
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/edge_list.hpp>
@@ -20,6 +21,8 @@ class GraphKeyLocks
 {
 public:
     using Ptr = std::shared_ptr<GraphKeyLocks>;
+    using KeyLock = std::tuple<std::string, std::string>;
+    using KeyLockView = std::tuple<std::string_view, std::string_view>;
 
     GraphKeyLocks() = default;
     GraphKeyLocks(const GraphKeyLocks&) = delete;
@@ -28,23 +31,23 @@ public:
     GraphKeyLocks& operator=(GraphKeyLocks&&) = delete;
 
     bool batchAcquireKeyLock(std::string_view contract, gsl::span<std::string const> keyLocks,
-        int64_t contextID, int64_t seq);
+        ContextID contextID, Seq seq);
 
     bool acquireKeyLock(
-        std::string_view contract, std::string_view key, int64_t contextID, int64_t seq);
+        std::string_view contract, std::string_view key, ContextID contextID, Seq seq);
 
     std::vector<std::string> getKeyLocksNotHoldingByContext(
-        std::string_view contract, int64_t excludeContextID) const;
+        std::string_view contract, ContextID excludeContextID) const;
 
-    void releaseKeyLocks(int64_t contextID, int64_t seq);
+    void releaseKeyLocks(ContextID contextID, Seq seq);
 
-    bool detectDeadLock() const;
+    std::forward_list<Context> detectDeadLock();
 
-    struct Vertex : public std::variant<int64_t, std::tuple<std::string, std::string>>
+    struct Vertex : public std::variant<ContextID, KeyLock>
     {
-        using std::variant<int64_t, std::tuple<std::string, std::string>>::variant;
+        using std::variant<ContextID, KeyLock>::variant;
 
-        bool operator==(const std::tuple<std::string_view, std::string_view>& rhs) const
+        bool operator==(const KeyLockView& rhs) const
         {
             if (index() != 1)
             {
@@ -79,11 +82,11 @@ private:
     Graph m_graph;
     std::map<Vertex, VertexID, std::less<>> m_vertexes;
 
-    VertexID touchContext(int64_t contextID);
-    VertexID touchKey(std::string_view contract, std::string_view key);
+    VertexID touchContext(ContextID contextID);
+    VertexID touchKeyLock(KeyLockView keylockView);
 
-    void addEdge(VertexID source, VertexID target, int64_t seq);
-    void removeEdge(VertexID source, VertexID target, int64_t seq);
+    void addEdge(VertexID source, VertexID target, Seq seq);
+    void removeEdge(VertexID source, VertexID target, Seq seq);
 };
 
 }  // namespace bcos::scheduler
@@ -91,7 +94,7 @@ private:
 namespace std
 {
 inline bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
-    const std::tuple<std::string_view, std::string_view>& rhs)
+    const bcos::scheduler::GraphKeyLocks::KeyLockView& rhs)
 {
     if (lhs.index() != 1)
     {
@@ -103,7 +106,7 @@ inline bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
     return view < rhs;
 }
 
-inline bool operator<(const std::tuple<std::string_view, std::string_view>& lhs,
+inline bool operator<(const bcos::scheduler::GraphKeyLocks::KeyLockView& lhs,
     const bcos::scheduler::GraphKeyLocks::Vertex& rhs)
 {
     if (rhs.index() != 1)
