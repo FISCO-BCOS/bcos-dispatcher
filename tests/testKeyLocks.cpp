@@ -90,7 +90,6 @@ BOOST_AUTO_TEST_CASE(deadLock)
     BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 1));
 
     BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 2));
-    // BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
 
     auto list = keyLocks.detectDeadLock();
     for (auto& it : list)
@@ -102,6 +101,7 @@ BOOST_AUTO_TEST_CASE(deadLock)
 
     // Add a dead lock
     BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
+    
     list = keyLocks.detectDeadLock();
     size_t count = 0;
     for (auto& it : list)

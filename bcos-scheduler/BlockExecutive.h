@@ -108,11 +108,11 @@ private:
         std::atomic_size_t received = 0;
         std::atomic_size_t error = 0;
 
-        std::function<void(Error::UniquePtr)> callback;
+        std::function<void(Error::UniquePtr, size_t)> callback;
         std::atomic_bool callbackExecuted = false;
         std::atomic_bool allSended = false;
     };
-    void startBatch(std::function<void(Error::UniquePtr)> callback);
+    void startBatch(std::function<void(Error::UniquePtr, size_t)> callback);
     void checkBatch(BatchStatus& status);
 
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);

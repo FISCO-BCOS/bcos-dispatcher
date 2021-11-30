@@ -448,7 +448,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 void BlockExecutive::DMTExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
-    startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
+    startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error, size_t executed) {
         auto recursionCallback = std::make_shared<std::function<void(Error::UniquePtr)>>();
 
         *recursionCallback = [this, recursionCallback, callback = std::move(callback)](
@@ -461,6 +461,7 @@ void BlockExecutive::DMTExecute(
                 return;
             }
 
+            // if(!m_executiveStates.empty() && )
             if (!m_executiveStates.empty())
             {
                 SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
@@ -743,7 +744,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
     }
 }
 
-void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
+void BlockExecutive::startBatch(std::function<void(Error::UniquePtr, size_t)> callback)
 {
     SCHEDULER_LOG(TRACE) << "Start batch";
     auto batchStatus = std::make_shared<BatchStatus>();
@@ -960,7 +961,8 @@ void BlockExecutive::checkBatch(BatchStatus& status)
             if (status.error > 0)
             {
                 status.callback(
-                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"));
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"),
+                    status.total);
                 return;
             }
 
@@ -995,7 +997,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                 }
             });
 
-            status.callback(nullptr);
+            status.callback(nullptr, status.total);
         }
     }
 }
