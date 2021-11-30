@@ -80,10 +80,10 @@ std::vector<std::string> GraphKeyLocks::getKeyLocksNotHoldingByContext(
         auto sourceVertex = boost::get(VertexPropertyTag(), boost::source(*it, m_graph));
         auto targetVertex = boost::get(VertexPropertyTag(), boost::target(*it, m_graph));
 
-        if (sourceVertex->index() == 0 && std::get<0>(*sourceVertex) != excludeContextID &&
-            targetVertex->index() == 1 && std::get<0>(std::get<1>(*targetVertex)) != contract)
+        if (targetVertex->index() == 0 && std::get<0>(*targetVertex) != excludeContextID &&
+            sourceVertex->index() == 1 && std::get<0>(std::get<1>(*sourceVertex)) == contract)
         {
-            uniqueKeyLocks.emplace(std::get<1>(std::get<1>(*targetVertex)));
+            uniqueKeyLocks.emplace(std::get<1>(std::get<1>(*sourceVertex)));
         }
     }
 
@@ -103,20 +103,20 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     auto vertex = touchContext(contextID);
 
     auto range = boost::in_edges(vertex, m_graph);
-    for (auto it = range.first; it != range.second;)
+    for (auto next = range.first; range.first != range.second; range.first = next)
     {
-        ++it;
-        auto edgeSeq = boost::get(EdgePropertyTag(), *it);
+        ++next;
+        auto edgeSeq = boost::get(EdgePropertyTag(), *range.first);
         if (edgeSeq == seq)
         {
             if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
             {
-                auto source = boost::get(VertexPropertyTag(), boost::source(*it, m_graph));
+                auto source = boost::get(VertexPropertyTag(), boost::source(*range.first, m_graph));
                 const auto& [contract, key] = std::get<1>(*source);
                 SCHEDULER_LOG(TRACE)
                     << "Releasing key lock, contract: " << contract << " key: " << key;
             }
-            boost::remove_edge(*it, m_graph);
+            boost::remove_edge(*range.first, m_graph);
         }
     }
 }
