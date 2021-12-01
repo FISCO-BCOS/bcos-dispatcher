@@ -183,7 +183,7 @@ GraphKeyLocks::detectDeadLock()
 
 GraphKeyLocks::VertexID GraphKeyLocks::touchContext(int64_t contextID)
 {
-    auto [it, inserted] = m_vertexes.emplace(Vertex(contextID), (VertexID)0);
+    auto [it, inserted] = m_vertexes.emplace(Vertex(contextID), VertexID());
     if (inserted)
     {
         it->second = boost::add_vertex(&(it->first), m_graph);
@@ -205,7 +205,7 @@ GraphKeyLocks::VertexID GraphKeyLocks::touchKeyLock(KeyLockView keyLockView)
     auto inserted = m_vertexes.emplace_hint(it,
         Vertex(std::make_tuple(
             std::string(std::get<0>(contractKeyView)), std::string(std::get<1>(contractKeyView)))),
-        (VertexID)0);
+        VertexID());
     inserted->second = boost::add_vertex(&(inserted->first), m_graph);
     return inserted->second;
 }

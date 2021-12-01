@@ -13,8 +13,6 @@ public:
 
     ~MockDeadLockParallelExecutor() override {}
 
-    const std::string& name() const { return m_name; }
-
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override

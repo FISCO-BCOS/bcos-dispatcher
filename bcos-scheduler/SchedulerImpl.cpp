@@ -26,8 +26,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::unique_lock<std::mutex> executeLock(m_executeMutex, std::try_to_lock);
     if (!executeLock.owns_lock())
     {
-        assert(!m_blocks.empty());
-
         auto message = "Another block is executing!";
         SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
