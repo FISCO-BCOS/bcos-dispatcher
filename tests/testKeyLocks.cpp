@@ -95,19 +95,21 @@ BOOST_AUTO_TEST_CASE(deadLock)
     for (auto& it : list)
     {
         BOOST_FAIL("Unexpected dead lock found");
-        auto [contextID, seq] = it;
-        std::cout << "Dead lock context: " << contextID << " seq: " << seq << std::endl;
+        auto [contextID, seq, contractView, keyView] = it;
+        std::cout << "Dead lock context: " << contextID << " seq: " << seq
+                  << " contract: " << contractView << " key: " << keyView << std::endl;
     }
 
     // Add a dead lock
     BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
-    
+
     list = keyLocks.detectDeadLock();
     size_t count = 0;
     for (auto& it : list)
     {
-        auto [contextID, seq] = it;
-        std::cout << "Dead lock context: " << contextID << " seq: " << seq << std::endl;
+        auto [contextID, seq, contractView, keyView] = it;
+        std::cout << "Dead lock context: " << contextID << " seq: " << seq
+                  << " contract: " << contractView << " key: " << keyView << std::endl;
         ++count;
     }
 

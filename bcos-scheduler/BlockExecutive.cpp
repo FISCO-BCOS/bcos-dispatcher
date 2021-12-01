@@ -7,6 +7,7 @@
 #include "interfaces/executor/ExecutionMessage.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/Transaction.h"
+#include "libexecutor/NativeExecutionMessage.h"
 #include "libutilities/Error.h"
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
@@ -448,7 +449,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 void BlockExecutive::DMTExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
-    startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error, size_t executed) {
+    startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
         auto recursionCallback = std::make_shared<std::function<void(Error::UniquePtr)>>();
 
         *recursionCallback = [this, recursionCallback, callback = std::move(callback)](
@@ -744,7 +745,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
     }
 }
 
-void BlockExecutive::startBatch(std::function<void(Error::UniquePtr, size_t)> callback)
+void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 {
     SCHEDULER_LOG(TRACE) << "Start batch";
     auto batchStatus = std::make_shared<BatchStatus>();
@@ -884,11 +885,12 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr, size_t)> ca
         {
             for (auto& keyIt : message->keyLocks())
             {
-                SCHEDULER_LOG(TRACE) << boost::format(
-                                            "Dispatch key lock type: %s, from: %s, key: %s, "
-                                            "contextID: %ld, seq: %ld") %
-                                            message->type() % message->from() % toHex(keyIt) %
-                                            contextID % seq;
+                SCHEDULER_LOG(TRACE)
+                    << boost::format(
+                           "Dispatch key lock type: %s, from: %s, to: %s, key: %s, "
+                           "contextID: %ld, seq: %ld") %
+                           message->type() % message->from() % message->to() % toHex(keyIt) %
+                           contextID % message->seq();
             }
         }
 
@@ -961,43 +963,79 @@ void BlockExecutive::checkBatch(BatchStatus& status)
             if (status.error > 0)
             {
                 status.callback(
-                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"),
-                    status.total);
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, "Batch with errors"));
                 return;
             }
 
-            // Process key locks & update order
-            traverseExecutive([this](ExecutiveState& executiveState) {
-                if (executiveState.skip)
+            if (!m_executiveStates.empty() && status.total == 0)
+            {
+                SCHEDULER_LOG(INFO) << "Processing dead lock";
+                // If no transaction are processed, detect dead lock
+                auto deadLocks = m_keyLocks.detectDeadLock();
+                for (auto& it : deadLocks)
                 {
-                    executiveState.skip = false;
-                    return SKIP;
-                }
+                    auto [contextID, seq, contractView, keyView] = it;
+                    SCHEDULER_LOG(INFO) << "Detected dead lock at " << contextID << " | " << seq
+                                        << " | " << contractView << " | " << keyView;
 
-                auto& message = executiveState.message;
-                switch (message->type())
-                {
-                case protocol::ExecutionMessage::MESSAGE:
-                case protocol::ExecutionMessage::KEY_LOCK:
-                {
-                    m_keyLocks.batchAcquireKeyLock(
-                        message->from(), message->keyLocks(), message->contextID(), message->seq());
-                    return UPDATE;
-                }
-                case bcos::protocol::ExecutionMessage::FINISHED:
-                case bcos::protocol::ExecutionMessage::REVERT:
-                {
-                    m_keyLocks.releaseKeyLocks(message->contextID(), message->seq());
-                    return PASS;
-                }
-                default:
-                {
-                    return PASS;
-                }
-                }
-            });
+                    auto executiveIt =
+                        m_executiveStates.find(std::make_tuple(contractView, contextID));
+                    if (executiveIt == m_executiveStates.end())
+                    {
+                        status.callback(BCOS_ERROR_UNIQUE_PTR(
+                            SchedulerError::BatchError, "Unexpected empty dead lock iterator"));
+                        return;
+                    }
 
-            status.callback(nullptr, status.total);
+                    if (executiveIt->second.message->seq() == seq)
+                    {
+                        SCHEDULER_LOG(INFO) << "Revert: " << contextID << " | " << seq << " | "
+                                            << contractView << " | " << keyView;
+                        executiveIt->second.message->setType(
+                            bcos::protocol::ExecutionMessage::REVERT);
+
+                        // startBatch() will decrease seq before push message while revert, but
+                        // revert by dead lock should use origin seq, +1 here later startBatch() can
+                        // push correct seq
+                        executiveIt->second.message->setSeq(seq + 1);
+                    }
+                }
+            }
+            else
+            {
+                // Process key locks & update order
+                traverseExecutive([this](ExecutiveState& executiveState) {
+                    if (executiveState.skip)
+                    {
+                        executiveState.skip = false;
+                        return SKIP;
+                    }
+
+                    auto& message = executiveState.message;
+                    switch (message->type())
+                    {
+                    case protocol::ExecutionMessage::MESSAGE:
+                    case protocol::ExecutionMessage::KEY_LOCK:
+                    {
+                        m_keyLocks.batchAcquireKeyLock(message->from(), message->keyLocks(),
+                            message->contextID(), message->seq());
+                        return UPDATE;
+                    }
+                    case bcos::protocol::ExecutionMessage::FINISHED:
+                    case bcos::protocol::ExecutionMessage::REVERT:
+                    {
+                        m_keyLocks.releaseKeyLocks(message->contextID(), message->seq());
+                        return PASS;
+                    }
+                    default:
+                    {
+                        return PASS;
+                    }
+                    }
+                });
+            }
+
+            status.callback(nullptr);
         }
     }
 }

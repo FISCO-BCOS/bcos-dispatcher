@@ -122,11 +122,13 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     }
 }
 
-std::forward_list<std::tuple<int64_t, int64_t>> GraphKeyLocks::detectDeadLock()
+std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView, GraphKeyLocks::KeyView>>
+GraphKeyLocks::detectDeadLock()
 {
     struct GraphVisitor
     {
-        GraphVisitor(std::forward_list<std::tuple<int64_t, int64_t>>& contextIDList)
+        GraphVisitor(std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView,
+                GraphKeyLocks::KeyView>>& contextIDList)
           : m_contextIDList(contextIDList)
         {}
 
@@ -145,20 +147,32 @@ std::forward_list<std::tuple<int64_t, int64_t>> GraphKeyLocks::detectDeadLock()
             auto sourceVertex = boost::get(VertexPropertyTag(), boost::source(e, g));
             auto targetVertex = boost::get(VertexPropertyTag(), boost::target(e, g));
 
-            auto contextVertex = sourceVertex;
+            ContextID contextID = 0;
+            ContractView contractView;
+            KeyView keyView;
             if (targetVertex->index() == 0)
             {
-                contextVertex = targetVertex;
+                contextID = std::get<0>(*targetVertex);
+                contractView = std::get<0>(std::get<1>(*sourceVertex));
+                keyView = std::get<1>(std::get<1>(*sourceVertex));
+            }
+            else
+            {
+                contextID = std::get<0>(*sourceVertex);
+                contractView = std::get<0>(std::get<1>(*targetVertex));
+                keyView = std::get<1>(std::get<1>(*targetVertex));
             }
 
-            auto contextID = std::get<0>(*contextVertex);
-            m_contextIDList.emplace_front(contextID, seq);
+            m_contextIDList.emplace_front(contextID, seq, contractView, keyView);
         }
 
-        std::forward_list<std::tuple<int64_t, int64_t>>& m_contextIDList;
+        std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView,
+            GraphKeyLocks::KeyView>>& m_contextIDList;
     };
 
-    std::forward_list<std::tuple<int64_t, int64_t>> contextIDList;
+    std::forward_list<
+        std::tuple<ContextID, Seq, GraphKeyLocks::ContractView, GraphKeyLocks::KeyView>>
+        contextIDList;
     std::map<VertexID, boost::default_color_type> vertexColors;
 
     boost::depth_first_search(

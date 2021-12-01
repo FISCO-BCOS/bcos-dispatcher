@@ -24,6 +24,9 @@ public:
     using KeyLock = std::tuple<std::string, std::string>;
     using KeyLockView = std::tuple<std::string_view, std::string_view>;
 
+    using ContractView = std::string_view;
+    using KeyView = std::string_view;
+
     GraphKeyLocks() = default;
     GraphKeyLocks(const GraphKeyLocks&) = delete;
     GraphKeyLocks(GraphKeyLocks&&) = delete;
@@ -41,7 +44,7 @@ public:
 
     void releaseKeyLocks(ContextID contextID, Seq seq);
 
-    std::forward_list<Context> detectDeadLock();
+    std::forward_list<std::tuple<ContextID, Seq, ContractView, KeyView>> detectDeadLock();
 
     struct Vertex : public std::variant<ContextID, KeyLock>
     {
