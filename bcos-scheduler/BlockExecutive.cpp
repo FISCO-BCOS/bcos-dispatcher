@@ -993,11 +993,6 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                                             << contractView << " | " << keyView;
                         executiveIt->second.message->setType(
                             bcos::protocol::ExecutionMessage::REVERT);
-
-                        // startBatch() will decrease seq before push message while revert, but
-                        // revert by dead lock should use origin seq, +1 here later startBatch() can
-                        // push correct seq
-                        executiveIt->second.message->setSeq(seq + 1);
                     }
                 }
             }
