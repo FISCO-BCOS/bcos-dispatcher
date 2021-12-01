@@ -850,6 +850,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 
             break;
         }
+        case protocol::ExecutionMessage::REVERT_KEY_LOCK:
+        {
+            message->setType(protocol::ExecutionMessage::REVERT);
+            message->setCreate(false);
+            SCHEDULER_LOG(TRACE) << "REVERT By key lock, " << message->contextID() << " | "
+                                 << message->seq() << " | " << std::hex
+                                 << message->transactionHash() << " | " << message->to();
+            break;
+        }
         // Retry type, send again
         case protocol::ExecutionMessage::KEY_LOCK:
         {
@@ -858,8 +867,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                     message->from(), message->keyLockAcquired(), contextID, seq))
             {
                 SCHEDULER_LOG(TRACE)
-                    << "Waiting key, contract: " << contextID << " | " << seq << message->from()
-                    << " keyLockAcquired: " << toHex(message->keyLockAcquired());
+                    << "Waiting key, contract: " << contextID << " | " << seq << " | "
+                    << message->from() << " keyLockAcquired: " << toHex(message->keyLockAcquired());
                 return PASS;
             }
 
@@ -983,8 +992,13 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                         m_executiveStates.find(std::make_tuple(contractView, contextID));
                     if (executiveIt == m_executiveStates.end())
                     {
-                        status.callback(BCOS_ERROR_UNIQUE_PTR(
-                            SchedulerError::BatchError, "Unexpected empty dead lock iterator"));
+                        auto message =
+                            (boost::format(
+                                 "Unexpected empty dead lock iterator:  %ld | %ld | %s | %s") %
+                                contextID % seq % contractView % keyView)
+                                .str();
+                        SCHEDULER_LOG(ERROR) << message;
+                        status.callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, message));
                         return;
                     }
 
@@ -993,7 +1007,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                         SCHEDULER_LOG(INFO) << "Revert: " << contextID << " | " << seq << " | "
                                             << contractView << " | " << keyView;
                         executiveIt->second.message->setType(
-                            bcos::protocol::ExecutionMessage::REVERT);
+                            bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK);
                     }
                 }
             }

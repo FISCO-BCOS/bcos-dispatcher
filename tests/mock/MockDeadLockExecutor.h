@@ -1,7 +1,6 @@
 #pragma once
 #include "MockExecutor.h"
 #include "interfaces/executor/ExecutionMessage.h"
-#include <boost/test/tools/old/interface.hpp>
 
 namespace bcos::test
 {
@@ -26,23 +25,39 @@ public:
 
         if (input->type() == protocol::ExecutionMessage::REVERT)
         {
-            if (input->seq() == 1)
+            if (input->contextID() == 1)
             {
-                BOOST_CHECK_EQUAL(input->to(), "contract1");
-                BOOST_CHECK_EQUAL(input->from(), "contract2");
-                input->setFrom("contract1");
-                input->setTo("contract2");
-            }
-            else if (input->seq() == 0)
-            {
-                // BOOST_CHECK_EQUAL(input->to(), "contract2");
-                BOOST_CHECK_EQUAL(input->from(), "contract1");
-                input->setFrom("contract2");
-                input->setTo("contract1");
+                if (input->seq() == 1)
+                {
+                    BOOST_CHECK_EQUAL(input->to(), "contract1");
+                    BOOST_CHECK_EQUAL(input->from(), "contract1");
+                }
+                else if (input->seq() == 0)
+                {
+                    BOOST_CHECK_EQUAL(input->to(), "contract1");
+                    BOOST_CHECK_EQUAL(input->from(), "contract1");
+                }
+                else
+                {
+                    BOOST_FAIL("Unexecuted seq");
+                }
             }
             else
             {
-                BOOST_FAIL("Unexecuted seq");
+                if (input->seq() == 1)
+                {
+                    BOOST_CHECK_EQUAL(input->to(), "contract2");
+                    BOOST_CHECK_EQUAL(input->from(), "contract2");
+                }
+                else if (input->seq() == 0)
+                {
+                    BOOST_CHECK_EQUAL(input->to(), "contract2");
+                    BOOST_CHECK_EQUAL(input->from(), "contract2");
+                }
+                else
+                {
+                    BOOST_FAIL("Unexecuted seq");
+                }
             }
         }
         else if (input->type() == protocol::ExecutionMessage::TXHASH)
