@@ -32,20 +32,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         return;
     }
 
-    auto [lastCommitedNumber, lock] = getLastCommitedBlockNumber();
-    if (lastCommitedNumber != 0 && lastCommitedNumber >= block->blockHeaderConst()->number())
-    {
-        lock.unlock();
-        auto message =
-            (boost::format("Try to execute an commited block: %ld, last commited number: %ld") %
-                block->blockHeaderConst()->number() % lastCommitedNumber)
-                .str();
-        SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
-        return;
-    }
-    lock.unlock();
-
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
 
     if (!m_blocks.empty())
@@ -92,6 +78,20 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
     }
+    else
+    {
+        auto lastExecutedNumber = m_lastExecutedBlockNumber.load();
+        if (lastExecutedNumber != 0 && lastExecutedNumber >= block->blockHeaderConst()->number())
+        {
+            auto message =
+                (boost::format("Try to execute an executed block: %ld, last executed number: %ld") %
+                    block->blockHeaderConst()->number() % lastExecutedNumber)
+                    .str();
+            SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
+            return;
+        }
+    }
 
     m_blocks.emplace_back(
         std::move(block), this, 0, m_transactionSubmitResultFactory, false, m_blockFactory, verify);
@@ -100,8 +100,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     auto& blockExecutive = m_blocks.back();
 
     blocksLock.unlock();
-    blockExecutive.asyncExecute([callback = std::move(callback), executeLock =
-                                                                     std::move(executeLockPtr)](
+    blockExecutive.asyncExecute([this, callback = std::move(callback),
+                                    executeLock = std::move(executeLockPtr)](
                                     Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
         if (error)
         {
@@ -115,6 +115,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         }
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
                             << LOG_KV("state root", header->stateRoot().hex());
+
+        m_lastExecutedBlockNumber.store(header->number());
 
         executeLock->unlock();
         callback(std::move(error), std::move(header));
@@ -214,6 +216,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
             if (m_txNotifier)
             {
+                SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
                 frontBlock.asyncNotify(m_txNotifier,
                     [this, blockNumber, callback = std::move(callback),
                         ledgerConfig = std::move(ledgerConfig),
@@ -223,14 +226,14 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                             m_blockNumberReceiver(blockNumber);
                         }
 
+                        SCHEDULER_LOG(INFO) << "End notify block result: " << blockNumber;
+
                         {
                             std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                             m_blocks.pop_front();
                             SCHEDULER_LOG(DEBUG)
                                 << "Remove committed block: " << blockNumber << " success";
                         }
-
-                        setLastCommitedBlockNumber(blockNumber);
 
                         commitLock->unlock();
                         // Note: only after the block notify finished can call the callback
@@ -244,8 +247,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     m_blocks.pop_front();
                     SCHEDULER_LOG(DEBUG) << "Remove committed block: " << blockNumber << " success";
                 }
-
-                setLastCommitedBlockNumber(blockNumber);
 
                 commitLock->unlock();
                 callback(nullptr, std::move(ledgerConfig));

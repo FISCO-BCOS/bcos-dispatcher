@@ -818,10 +818,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
-                // Execution is finished, generate receipt
-                SCHEDULER_LOG(DEBUG)
-                    << "Transaction Finished, logEntries: " << message->logEntries().size();
-
                 m_executiveResults[executiveState.contextID].receipt =
                     m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
                         message->gasAvailable(), message->newEVMContractAddress(),
@@ -854,6 +850,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         {
             message->setType(protocol::ExecutionMessage::REVERT);
             message->setCreate(false);
+            message->setKeyLocks({});
             SCHEDULER_LOG(TRACE) << "REVERT By key lock, " << message->contextID() << " | "
                                  << message->seq() << " | " << std::hex
                                  << message->transactionHash() << " | " << message->to();
@@ -1033,6 +1030,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                     }
                     case bcos::protocol::ExecutionMessage::FINISHED:
                     case bcos::protocol::ExecutionMessage::REVERT:
+                    case bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK:
                     {
                         m_keyLocks.releaseKeyLocks(message->contextID(), message->seq());
                         return PASS;
