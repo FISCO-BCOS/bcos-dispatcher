@@ -463,7 +463,6 @@ void BlockExecutive::DMTExecute(
                 return;
             }
 
-            // if(!m_executiveStates.empty() && )
             if (!m_executiveStates.empty())
             {
                 SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
@@ -877,9 +876,27 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         // Retry type, send again
         case protocol::ExecutionMessage::SEND_BACK:
         {
-            SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq;
+            SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
+                                 << message->transactionHash();
 
-            message->setType(protocol::ExecutionMessage::TXHASH);
+            if (message->transactionHash() != h256(0))
+            {
+                message->setType(protocol::ExecutionMessage::TXHASH);
+            }
+
+            if (message->to().empty())
+            {
+                if (message->createSalt())
+                {
+                    message->setTo(
+                        newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+                }
+                else
+                {
+                    message->setTo(newEVMAddress(number(), contextID, seq));
+                }
+            }
+
             break;
         }
         }
@@ -989,23 +1006,21 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                         m_executiveStates.find(std::make_tuple(contractView, contextID));
                     if (executiveIt == m_executiveStates.end())
                     {
-                        auto message =
-                            (boost::format(
-                                 "Unexpected empty dead lock iterator:  %ld | %ld | %s | %s") %
-                                contextID % seq % contractView % keyView)
-                                .str();
-                        SCHEDULER_LOG(ERROR) << message;
-                        status.callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, message));
-                        return;
+                        // Find the lastest caller of contract, and revert it
+                        executiveIt =
+                            m_executiveStates.upper_bound(std::make_tuple(contractView, INT64_MAX));
+
+                        if (executiveIt != m_executiveStates.begin())
+                        {
+                            --executiveIt;
+                        }
                     }
 
-                    if (executiveIt->second.message->seq() == seq)
-                    {
-                        SCHEDULER_LOG(INFO) << "Revert: " << contextID << " | " << seq << " | "
-                                            << contractView << " | " << keyView;
-                        executiveIt->second.message->setType(
-                            bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK);
-                    }
+                    SCHEDULER_LOG(INFO) << "Revert: " << executiveIt->second.message->contextID()
+                                        << " | " << executiveIt->second.message->seq() << " | "
+                                        << contractView << " | " << keyView;
+                    executiveIt->second.message->setType(
+                        bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK);
                 }
             }
             else

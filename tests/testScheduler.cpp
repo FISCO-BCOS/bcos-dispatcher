@@ -617,26 +617,23 @@ BOOST_AUTO_TEST_CASE(getCode)
 
 BOOST_AUTO_TEST_CASE(executeWithDeadLock)
 {
-    // Add executor
-    // TODO: Enable this test later
-    // auto executor = std::make_shared<MockDeadLockParallelExecutor>("executor10");
-    // executorManager->addExecutor("executor10", executor);
+    auto executor = std::make_shared<MockDeadLockParallelExecutor>("executor10");
+    executorManager->addExecutor("executor10", executor);
 
-    // auto block = blockFactory->createBlock();
-    // block->blockHeader()->setNumber(900);
-    // for (size_t i = 0; i < 2; ++i)
-    // {
-    //     auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-    //         h256(i + 1), "contract" + boost::lexical_cast<std::string>(i + 1));
-    //     block->appendTransactionMetaData(std::move(metaTx));
-    // }
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(900);
+    for (size_t i = 0; i < 2; ++i)
+    {
+        auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+            h256(i + 1), "contract" + boost::lexical_cast<std::string>(i + 1));
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
 
-    // scheduler->executeBlock(
-    //     block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&&
-    //     blockHeader) {
-    //         BOOST_CHECK(!error);
-    //         BOOST_CHECK(blockHeader);
-    //     });
+    scheduler->executeBlock(
+        block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(blockHeader);
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

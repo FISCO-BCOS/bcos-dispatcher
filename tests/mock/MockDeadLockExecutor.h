@@ -97,12 +97,14 @@ public:
         }
         else if (input->type() == protocol::ExecutionMessage::KEY_LOCK)
         {
-            BOOST_CHECK_EQUAL(input->to(), "contract2");
+            std::set<std::string, std::less<>> contracts = {"contract1", "contract2"};
+            BOOST_CHECK_EQUAL(contracts.count(input->to()), 1);
             input->setType(protocol::ExecutionMessage::FINISHED);
         }
         else if (input->type() == protocol::ExecutionMessage::FINISHED)
         {
-            BOOST_CHECK_EQUAL(input->to(), "contract2");
+            std::set<std::string, std::less<>> contracts = {"contract1", "contract2"};
+            BOOST_CHECK_EQUAL(contracts.count(input->to()), 1);
         }
 
         callback(nullptr, std::move(input));
