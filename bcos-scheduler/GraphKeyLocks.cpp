@@ -122,15 +122,11 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     }
 }
 
-std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView, GraphKeyLocks::KeyView>>
-GraphKeyLocks::detectDeadLock()
+bool GraphKeyLocks::detectDeadLock(ContextID contextID)
 {
     struct GraphVisitor
     {
-        GraphVisitor(std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView,
-                GraphKeyLocks::KeyView>>& contextIDList)
-          : m_contextIDList(contextIDList)
-        {}
+        GraphVisitor(bool& backEdge) : m_backEdge(backEdge) {}
 
         void initialize_vertex(VertexID, const Graph&) {}
         void start_vertex(VertexID, const Graph&) {}
@@ -141,44 +137,28 @@ GraphKeyLocks::detectDeadLock()
         void finish_edge(EdgeID, const Graph&) {}
         void finish_vertex(VertexID, const Graph&) {}
 
-        void back_edge(EdgeID e, const Graph& g) const
-        {
-            auto seq = boost::get(EdgePropertyTag(), e);
-            auto sourceVertex = boost::get(VertexPropertyTag(), boost::source(e, g));
-            auto targetVertex = boost::get(VertexPropertyTag(), boost::target(e, g));
+        void back_edge(EdgeID, const Graph&) const { m_backEdge = true; }
 
-            ContextID contextID = 0;
-            ContractView contractView;
-            KeyView keyView;
-            if (targetVertex->index() == 0)
-            {
-                contextID = std::get<0>(*targetVertex);
-                contractView = std::get<0>(std::get<1>(*sourceVertex));
-                keyView = std::get<1>(std::get<1>(*sourceVertex));
-            }
-            else
-            {
-                contextID = std::get<0>(*sourceVertex);
-                contractView = std::get<0>(std::get<1>(*targetVertex));
-                keyView = std::get<1>(std::get<1>(*targetVertex));
-            }
-
-            m_contextIDList.emplace_front(contextID, seq, contractView, keyView);
-        }
-
-        std::forward_list<std::tuple<ContextID, Seq, GraphKeyLocks::ContractView,
-            GraphKeyLocks::KeyView>>& m_contextIDList;
+        bool& m_backEdge;
     };
 
-    std::forward_list<
-        std::tuple<ContextID, Seq, GraphKeyLocks::ContractView, GraphKeyLocks::KeyView>>
-        contextIDList;
     std::map<VertexID, boost::default_color_type> vertexColors;
 
-    boost::depth_first_search(
-        m_graph, GraphVisitor(contextIDList), boost::make_assoc_property_map(vertexColors));
+    bool hasDeadLock = false;
 
-    return contextIDList;
+    auto it = m_vertexes.find(bcos::scheduler::GraphKeyLocks::Vertex(contextID));
+    if (it == m_vertexes.end())
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(SchedulerError::UnexpectedKeyLockError, "Not found vertex!"));
+    }
+
+    boost::depth_first_visit(m_graph, it->second, GraphVisitor(hasDeadLock),
+        boost::make_assoc_property_map(vertexColors),
+        [&hasDeadLock](VertexID, const Graph&) { return hasDeadLock; });
+
+
+    return hasDeadLock;
 }
 
 GraphKeyLocks::VertexID GraphKeyLocks::touchContext(int64_t contextID)
