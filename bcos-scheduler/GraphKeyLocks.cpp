@@ -61,6 +61,10 @@ bool GraphKeyLocks::acquireKeyLock(
         }
     }
 
+    // Remove all request edge
+    boost::remove_edge(contextVertex, keyVertex, m_graph);
+
+    // Add an own edge
     addEdge(keyVertex, contextVertex, seq);
 
     SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
