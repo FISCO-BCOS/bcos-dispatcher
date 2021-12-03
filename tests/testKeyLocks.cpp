@@ -90,6 +90,15 @@ BOOST_AUTO_TEST_CASE(deadLock)
     BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 1));
 
     BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 2));
+    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 4));
+
+    BOOST_CHECK(!keyLocks.detectDeadLock(1000));
+    BOOST_CHECK(!keyLocks.detectDeadLock(1000));
+    BOOST_CHECK(!keyLocks.detectDeadLock(1001));
+
+    // Add more duplicate edge
+    BOOST_CHECK(keyLocks.acquireKeyLock(to, key1, 1000, 3));
+    BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 3));
 
     BOOST_CHECK(!keyLocks.detectDeadLock(1000));
     BOOST_CHECK(!keyLocks.detectDeadLock(1001));

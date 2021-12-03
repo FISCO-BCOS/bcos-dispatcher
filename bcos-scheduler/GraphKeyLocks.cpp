@@ -12,6 +12,7 @@
 #include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 
 using namespace bcos::scheduler;
 
@@ -107,22 +108,48 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     SCHEDULER_LOG(TRACE) << "Release key lock, contextID: " << contextID << " seq: " << seq;
     auto vertex = touchContext(contextID);
 
-    auto range = boost::in_edges(vertex, m_graph);
-    for (auto next = range.first; range.first != range.second; range.first = next)
-    {
-        ++next;
-        auto edgeSeq = boost::get(EdgePropertyTag(), *range.first);
-        if (edgeSeq == seq)
+    auto edgeRemoveFunc = [seq, graph = &m_graph](auto range) mutable -> bool {
+        size_t total = 0;
+        size_t removed = 0;
+
+        for (auto next = range.first; range.first != range.second; range.first = next)
         {
-            if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
+            ++total;
+            ++next;
+            auto edgeSeq = boost::get(EdgePropertyTag(), *range.first);
+            if (edgeSeq == seq)
             {
-                auto source = boost::get(VertexPropertyTag(), boost::source(*range.first, m_graph));
-                const auto& [contract, key] = std::get<1>(*source);
-                SCHEDULER_LOG(TRACE)
-                    << "Releasing key lock, contract: " << contract << " key: " << key;
+                ++removed;
+                if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
+                {
+                    auto source =
+                        boost::get(VertexPropertyTag(), boost::source(*range.first, *graph));
+                    auto target =
+                        boost::get(VertexPropertyTag(), boost::target(*range.first, *graph));
+                    if (target->index() == 1)
+                    {
+                        source = target;
+                    }
+
+                    const auto& [contract, key] = std::get<1>(*source);
+                    SCHEDULER_LOG(TRACE)
+                        << "Releasing key lock, contract: " << contract << " key: " << key;
+                }
+                boost::remove_edge(*range.first, *graph);
             }
-            boost::remove_edge(*range.first, m_graph);
         }
+
+        return total == removed;
+    };
+
+    auto clearedIn = edgeRemoveFunc(boost::in_edges(vertex, m_graph));
+    auto clearedOut = edgeRemoveFunc(boost::out_edges(vertex, m_graph));
+
+    if (clearedIn && clearedOut)
+    {
+        // All edge had removed, delete the vertex
+        boost::remove_vertex(vertex, m_graph);
+        m_vertexes.erase(contextID);
     }
 }
 
@@ -141,22 +168,26 @@ bool GraphKeyLocks::detectDeadLock(ContextID contextID)
         void finish_edge(EdgeID, const Graph&) {}
         void finish_vertex(VertexID, const Graph&) {}
 
-        void back_edge(EdgeID, const Graph&) const { m_backEdge = true; }
+        void back_edge(EdgeID edgeID, const Graph&) const
+        {
+            auto edgeSeq = boost::get(EdgePropertyTag(), edgeID);
+            SCHEDULER_LOG(TRACE) << "Detected back edge seq: " << edgeSeq;
+
+            m_backEdge = true;
+        }
 
         bool& m_backEdge;
     };
 
-    std::map<VertexID, boost::default_color_type> vertexColors;
-
-    bool hasDeadLock = false;
-
     auto it = m_vertexes.find(bcos::scheduler::GraphKeyLocks::Vertex(contextID));
     if (it == m_vertexes.end())
     {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(SchedulerError::UnexpectedKeyLockError, "Not found vertex!"));
+        // No vertex, may be removed
+        return false;
     }
 
+    std::map<VertexID, boost::default_color_type> vertexColors;
+    bool hasDeadLock = false;
     boost::depth_first_visit(m_graph, it->second, GraphVisitor(hasDeadLock),
         boost::make_assoc_property_map(vertexColors),
         [&hasDeadLock](VertexID, const Graph&) { return hasDeadLock; });
