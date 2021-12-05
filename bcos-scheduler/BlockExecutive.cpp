@@ -1038,7 +1038,7 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                     case bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK:
                     {
                         m_keyLocks.releaseKeyLocks(message->contextID(), message->seq());
-                        return PASS;
+                        return UPDATE;
                     }
                     default:
                     {
