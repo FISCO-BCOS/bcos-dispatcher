@@ -836,6 +836,16 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 return DELETE;
             }
 
+            // Check if another context processing same contract
+            auto contractIt = m_calledContract.lower_bound(message->to());
+            if (contractIt != m_calledContract.end() && *contractIt == message->to())
+            {
+                SCHEDULER_LOG(TRACE)
+                    << "Skip, " << contextID << " | " << seq << " | " << message->to();
+                executiveState.skip = true;
+                return SKIP;
+            }
+
             message->setSeq(executiveState.callStack.top());
             message->setCreate(false);
 
