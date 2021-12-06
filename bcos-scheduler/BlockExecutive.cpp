@@ -1002,7 +1002,8 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                 {
                     SCHEDULER_LOG(TRACE) << "Check dead lock at: " << it->second.contextID << " | "
                                          << it->second.message->seq();
-                    if (m_keyLocks.detectDeadLock(it->second.contextID))
+                    if (it->second.message->type() == protocol::ExecutionMessage::KEY_LOCK &&
+                        m_keyLocks.detectDeadLock(it->second.contextID))
                     {
                         SCHEDULER_LOG(INFO) << "Detected dead lock at " << it->second.contextID
                                             << " | " << it->second.message->seq() << " , revert";
@@ -1027,18 +1028,26 @@ void BlockExecutive::checkBatch(BatchStatus& status)
                     switch (message->type())
                     {
                     case protocol::ExecutionMessage::MESSAGE:
-                    case protocol::ExecutionMessage::KEY_LOCK:
                     {
                         m_keyLocks.batchAcquireKeyLock(message->from(), message->keyLocks(),
                             message->contextID(), message->seq());
                         return UPDATE;
                     }
+                    case protocol::ExecutionMessage::KEY_LOCK:
+                    {
+                        m_keyLocks.batchAcquireKeyLock(message->from(), message->keyLocks(),
+                            message->contextID(), message->seq());
+                        return PASS;
+                    }
                     case bcos::protocol::ExecutionMessage::FINISHED:
                     case bcos::protocol::ExecutionMessage::REVERT:
-                    case bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK:
                     {
                         m_keyLocks.releaseKeyLocks(message->contextID(), message->seq());
                         return UPDATE;
+                    }
+                    case bcos::protocol::ExecutionMessage::REVERT_KEY_LOCK:
+                    {
+                        return PASS;
                     }
                     default:
                     {
@@ -1145,9 +1154,8 @@ OUT:
         {
             it->key() = std::make_tuple(it->mapped().message->to(), it->mapped().contextID);
 
-            SCHEDULER_LOG(TRACE) << "Reinsert context: " << it->mapped().message->contextID()
-                                 << " | " << it->mapped().message->seq() << " | "
-                                 << std::get<0>(it->key());
+            SCHEDULER_LOG(TRACE) << "Reinsert context: " << it->mapped().contextID << " | "
+                                 << it->mapped().message->seq() << " | " << std::get<0>(it->key());
             m_executiveStates.insert(std::move(*it));
         }
     }
