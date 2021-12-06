@@ -783,7 +783,6 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 executiveState.skip = true;
                 return SKIP;
             }
-
             m_calledContract.emplace_hint(contractIt, message->to());
 
             auto newSeq = executiveState.currentSeq++;
@@ -845,6 +844,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 executiveState.skip = true;
                 return SKIP;
             }
+            m_calledContract.emplace_hint(contractIt, message->to());
 
             message->setSeq(executiveState.callStack.top());
             message->setCreate(false);
