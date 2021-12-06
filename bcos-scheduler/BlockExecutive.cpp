@@ -1141,14 +1141,14 @@ OUT:
     // Process the update nodes
     if (!updateNodes.empty())
     {
-        for (auto& it : updateNodes)
+        for (auto it = updateNodes.begin(); it != updateNodes.end(); ++it)
         {
-            it.key() = std::make_tuple(it.mapped().message->to(), it.mapped().contextID);
+            it->key() = std::make_tuple(it->mapped().message->to(), it->mapped().contextID);
 
-            SCHEDULER_LOG(TRACE) << "Reinsert context: " << it.mapped().message->contextID()
-                                 << " | " << it.mapped().message->seq() << " | "
-                                 << std::get<0>(it.key());
-            m_executiveStates.insert(std::move(it));
+            SCHEDULER_LOG(TRACE) << "Reinsert context: " << it->mapped().message->contextID()
+                                 << " | " << it->mapped().message->seq() << " | "
+                                 << std::get<0>(it->key());
+            m_executiveStates.insert(std::move(*it));
         }
     }
 }
