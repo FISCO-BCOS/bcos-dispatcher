@@ -886,6 +886,10 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             {
                 message->setType(protocol::ExecutionMessage::TXHASH);
             }
+            else
+            {
+                message->setType(protocol::ExecutionMessage::MESSAGE);
+            }
 
             if (message->to().empty())
             {
