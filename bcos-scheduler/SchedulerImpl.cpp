@@ -56,9 +56,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             SCHEDULER_LOG(TRACE) << "BlockHeader stateRoot: " << std::hex
                                  << it->result()->stateRoot();
 
+            auto blockHeader = it->result();
+
             blocksLock.unlock();
             executeLock.unlock();
-            callback(nullptr, it->result());
+            callback(nullptr, std::move(blockHeader));
             return;
         }
 
